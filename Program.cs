@@ -30,10 +30,19 @@ namespace CSharpScriptRunner
         [STAThread]
         static void Main(string[] args)
         {
-            if (args == null || args.Length == 0)
-                Install();
-            else
-                RunScript(args);
+            try
+            {
+                if (args == null || args.Length == 0)
+                    Install();
+                else
+                    RunScript(args);
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(ex);
+                System.Threading.Thread.Sleep(5000);
+            }
         }
 
         static void Install()
@@ -54,22 +63,35 @@ namespace CSharpScriptRunner
                 if (!File.Exists(Path.Combine(dir, filename)))
                     continue;
 
-                Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(()=>
+                Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(() =>
                 {
                     var dst = Path.Combine(newDir, file.Substring(oldDir.Length + 1));
                     Directory.CreateDirectory(Path.GetDirectoryName(dst));
                     Console.WriteLine($"Copying {dst} ...");
                     File.Copy(file, dst, true);
                 }))).Wait();
-            }            
+            }
+
+            var envPath = Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User)
+                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(x => !x.Contains(nameof(CSharpScriptRunner)))
+                .Append(Path.GetDirectoryName(newPath));
+            Environment.SetEnvironmentVariable("Path", string.Join(';', envPath), EnvironmentVariableTarget.User);
 
             var filetype = ".csx";
 
             using (var regKeyExt = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{filetype}", true))
             {
-                filetype = filetype.Substring(1) + "_auto_file";
-                regKeyExt.SetValue(string.Empty, filetype);
+                var tmp = regKeyExt.GetValue(string.Empty) as string;
+                if (!string.IsNullOrEmpty(tmp))
+                    filetype = tmp;
+                else
+                {
+                    filetype = filetype.Substring(1) + "_auto_file";
+                    regKeyExt.SetValue(string.Empty, filetype);
+                }
             }
+
             using (var regKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{filetype}\shell\execute", true))
             using (var regKeyCommand = regKey.CreateSubKey("command", true))
             {
@@ -79,6 +101,7 @@ namespace CSharpScriptRunner
 
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("Installation was successful.");
+            Console.ResetColor();
             System.Threading.Thread.Sleep(5000);
         }
 
@@ -160,8 +183,8 @@ namespace CSharpScriptRunner
             var result = compilation.Emit(assemblyFile);
             PrintCompilationDiagnostics(result, lines);
             if (!result.Success)
-            {
-                Console.ReadLine();
+            {                
+                System.Threading.Thread.Sleep(5000);
                 return false;
             }
 
@@ -181,7 +204,7 @@ namespace CSharpScriptRunner
 
         static void RunScript(string[] args)
         {
-            var scriptPath = args[0];
+            var scriptPath = Path.GetFullPath(args[0]);
             var runtimeExt = Path.GetExtension(Path.GetFileNameWithoutExtension(scriptPath));
             if (!string.IsNullOrEmpty(runtimeExt))
             {
@@ -196,11 +219,13 @@ namespace CSharpScriptRunner
                     exePath = Path.Combine(dir, runtimeExt, filename);
                     if (File.Exists(exePath))
                     {
-                        Process.Start(new ProcessStartInfo(exePath, string.Join(" ", args.Select(x=> $"\"{x.Replace("\"", "\\\"")}\""))) { UseShellExecute = false});
+                        Process.Start(new ProcessStartInfo(exePath, string.Join(" ", args.Select(x => $"\"{x.Replace("\"", "\\\"")}\""))) { UseShellExecute = false });
                         return;
                     }
-                    
+
+                    Console.ForegroundColor = ConsoleColor.Yellow;
                     Console.WriteLine($"Warning: Runtime '{runtimeExt}' was not found. Proceeding anyway...");
+                    Console.ResetColor();
                 }
             }
 
@@ -230,37 +255,37 @@ namespace CSharpScriptRunner
         }
 
         static void PrintCompilationDiagnostics(EmitResult result, string[] lines)
-		{
-			var color = Console.ForegroundColor;
-			foreach (var diag in result.Diagnostics)
-			{
-				switch (diag.Severity)
-				{
-					case DiagnosticSeverity.Warning: Console.ForegroundColor = ConsoleColor.Yellow; break;
-					case DiagnosticSeverity.Error: Console.ForegroundColor = ConsoleColor.Red; break;
-					default: Console.ForegroundColor = color; break;
-				}
+        {
+            var color = Console.ForegroundColor;
+            foreach (var diag in result.Diagnostics)
+            {
+                switch (diag.Severity)
+                {
+                    case DiagnosticSeverity.Warning: Console.ForegroundColor = ConsoleColor.Yellow; break;
+                    case DiagnosticSeverity.Error: Console.ForegroundColor = ConsoleColor.Red; break;
+                    default: Console.ForegroundColor = color; break;
+                }
 
-				var loc = diag.Location.GetLineSpan();
-				Console.WriteLine($"{diag.Severity} ({loc.StartLinePosition.Line}, {loc.StartLinePosition.Character}): {diag.GetMessage()}");
-				if (lines != null)
-				{
-					var color2 = Console.ForegroundColor;
-					var codeStart = lines[loc.StartLinePosition.Line].Substring(0, loc.StartLinePosition.Character);
-					var codeEnd = lines[loc.EndLinePosition.Line].Substring(loc.EndLinePosition.Character);
-					var code = string.Join(Environment.NewLine, lines.Skip(loc.StartLinePosition.Line).Take(loc.EndLinePosition.Line - loc.StartLinePosition.Line + 1));
-					code = code.Substring(codeStart.Length, code.Length - codeStart.Length - codeEnd.Length);
+                var loc = diag.Location.GetLineSpan();
+                Console.WriteLine($"{diag.Severity} ({loc.StartLinePosition.Line}, {loc.StartLinePosition.Character}): {diag.GetMessage()}");
+                if (lines != null)
+                {
+                    var color2 = Console.ForegroundColor;
+                    var codeStart = lines[loc.StartLinePosition.Line].Substring(0, loc.StartLinePosition.Character);
+                    var codeEnd = lines[loc.EndLinePosition.Line].Substring(loc.EndLinePosition.Character);
+                    var code = string.Join(Environment.NewLine, lines.Skip(loc.StartLinePosition.Line).Take(loc.EndLinePosition.Line - loc.StartLinePosition.Line + 1));
+                    code = code.Substring(codeStart.Length, code.Length - codeStart.Length - codeEnd.Length);
 
-					Console.ForegroundColor = color;
-					Console.Write(codeStart);
-					Console.ForegroundColor = color2;
-					Console.Write(code);
-					Console.ForegroundColor = color;
-					Console.Write(codeEnd);
-					Console.WriteLine();
-				}
-			}
-			Console.ForegroundColor = color;
-		}
+                    Console.ForegroundColor = color;
+                    Console.Write(codeStart);
+                    Console.ForegroundColor = color2;
+                    Console.Write(code);
+                    Console.ForegroundColor = color;
+                    Console.Write(codeEnd);
+                    Console.WriteLine();
+                }
+            }
+            Console.ForegroundColor = color;
+        }
     }
 }
