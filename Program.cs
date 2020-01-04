@@ -34,6 +34,8 @@ namespace CSharpScriptRunner
             {
                 if (args == null || args.Length == 0)
                     Install();
+                else if (args[0] == "new")
+                    CreateNew(args.Length > 1 ? args[1] : null);
                 else
                     RunScript(args);
             }
@@ -152,7 +154,7 @@ namespace CSharpScriptRunner
         static IDictionary<string, string> ParseArguments(IEnumerable<string> args)
         {
             var arguments = new Dictionary<string, string>();
-            arguments["ThisScriptPath"] = args.First();
+            arguments["ThisScriptPath"] = Path.GetFullPath(args.First());
             string key = null;
             foreach (var value in args.Skip(1))
             {
@@ -249,8 +251,9 @@ namespace CSharpScriptRunner
             if (entryPoint == null)
                 return;
 
+            var arguments = ParseArguments(args);
             Environment.CurrentDirectory = Path.GetDirectoryName(scriptPath);
-            var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(ParseArguments(args)), null } });
+            var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(arguments), null } });
             task.Wait();
         }
 
@@ -286,6 +289,47 @@ namespace CSharpScriptRunner
                 }
             }
             Console.ForegroundColor = color;
+        }
+
+        static void CreateNew(string template)
+        {
+            var templates = typeof(Program).Assembly.GetManifestResourceNames()
+                .ToDictionary(x => Path.GetExtension(Path.GetFileNameWithoutExtension(x)).Substring(1), StringComparer.OrdinalIgnoreCase);
+            
+            if (template == null)
+            {
+                Console.Write("Available templates: ");
+                Console.WriteLine(string.Join(", ", templates.Keys));
+                Console.Write("Enter the name of the template you wish to create: ");
+                template = Console.ReadLine();
+            }
+
+            if (!templates.TryGetValue(template, out var resName))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"The template '{template}' does not exists.");
+                Console.ResetColor();
+                return;
+            }
+
+            var filename = template + ".csx";
+            if (File.Exists(filename))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"The file '{filename} already exists.");
+                Console.ResetColor();
+                return;
+            }
+
+            using (var res = typeof(Program).Assembly.GetManifestResourceStream(resName))
+            using (var file = File.OpenWrite(filename))
+            {
+                res.CopyTo(file);
+            }
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"The file '{filename}' was created.");
+            Console.ResetColor();
         }
     }
 }
