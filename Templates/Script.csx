@@ -18,7 +18,7 @@ Script.WriteLine("Arguments:");
 foreach (var arg in Args)
     Script.WriteLine($"{arg.Key}: {arg.Value}");
 
-Console.WriteLine("Press Enter to exit");
+Script.WriteLine("Press Enter to exit");
 Console.ReadLine();
 
 #region Utilities

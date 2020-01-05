@@ -30,9 +30,12 @@ namespace CSharpScriptRunner
         [STAThread]
         static void Main(string[] args)
         {
+            if (args == null || args.Length == 0)
+                return;
+
             try
             {
-                if (args == null || args.Length == 0)
+                if (args[0] == "install")
                     Install();
                 else if (args[0] == "new")
                     CreateNew(args.Length > 1 ? args[1] : null);
@@ -169,6 +172,7 @@ namespace CSharpScriptRunner
                     if (key == null)
                         throw new ArgumentNullException(value, "The parameter is missing its name.");
                     arguments[key] = value;
+                    key = null;
                 }
             }
             if (key != null)
