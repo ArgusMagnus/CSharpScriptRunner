@@ -5,7 +5,7 @@ on: [push]
 jobs:
   build:
     
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     
     steps:
       - uses: actions/checkout@v1
@@ -18,7 +18,7 @@ jobs:
           
   publish:
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     if: contains(github.ref, 'tags/v') # works only version tagged
     needs: [build]
 
