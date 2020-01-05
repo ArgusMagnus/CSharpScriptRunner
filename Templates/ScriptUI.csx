@@ -1,3 +1,5 @@
+// Run with CSharpScriptRunner: https://github.com/ArgusMagnus/CSharpScriptRunner/releases
+//
 // Arguments:
 // Arguments are received in the global variable 'Args' which is of type 'IReadOnlyDictionary<string, string>'.
 // Arguments are passed to the script in the format "-argName argValue". When no 'argValue' is specified,
