@@ -15,6 +15,7 @@ using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using System.Text.RegularExpressions;
 
 namespace CSharpScriptRunner
 {
@@ -208,6 +209,13 @@ namespace CSharpScriptRunner
             return true;
         }
 
+        static void LoadPackages(string scriptPath)
+        {
+            var matches = Regex.Matches(File.ReadAllText(scriptPath), @"^//#AddPackage\s+""(?<name>[\w.-]+),\s*(?<version>[\w.-]+)""\s*$", RegexOptions.Multiline);
+            foreach (Match match in matches)
+                NuGet.LoadPackage(match.Groups["name"].Value, match.Groups["version"].Value).Wait();
+        }
+
         static void RunScript(string[] args)
         {
             var scriptPath = Path.GetFullPath(args[0]);
@@ -234,7 +242,9 @@ namespace CSharpScriptRunner
                     Console.ResetColor();
                 }
             }
-
+            
+            LoadPackages(scriptPath);
+                
             var cacheFileBase = GetCacheFilenameBase(scriptPath);
             var assemblyFile = cacheFileBase + ".dll";
             var hashFile = cacheFileBase + ".hash";
