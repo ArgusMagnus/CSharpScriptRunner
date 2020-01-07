@@ -21,9 +21,9 @@ namespace CSharpScriptRunner
 {
     public sealed class ScriptGlobals
     {
-        public IReadOnlyDictionary<string, string> Args { get; }
+        public string[] Args { get; }
 
-        internal ScriptGlobals(IDictionary<string, string> args) => Args = new ReadOnlyDictionary<string, string>(args);
+        internal ScriptGlobals(string[] args) => Args = args;
     }
 
     static class Program
@@ -155,31 +155,6 @@ namespace CSharpScriptRunner
             return true;
         }
 
-        static IDictionary<string, string> ParseArguments(IEnumerable<string> args)
-        {
-            var arguments = new Dictionary<string, string>();
-            string key = null;
-            foreach (var value in args.Skip(1))
-            {
-                if (value.StartsWith("-"))
-                {
-                    if (key != null)
-                        arguments[key] = true.ToString();
-                    key = value.Substring(1);
-                }
-                else
-                {
-                    if (key == null)
-                        throw new ArgumentNullException(value, "The parameter is missing its name.");
-                    arguments[key] = value;
-                    key = null;
-                }
-            }
-            if (key != null)
-                arguments[key] = true.ToString();
-            return arguments;
-        }
-
         static bool TryBuild(string scriptFile, string assemblyFile, string hashFile, string configFile, byte[] scriptHash, out Config config)
         {
             config = null;
@@ -267,10 +242,9 @@ namespace CSharpScriptRunner
             var entryPoint = type.GetMethod(config.Method, BindingFlags.Static | BindingFlags.Public);
             if (entryPoint == null)
                 return;
-
-            var arguments = ParseArguments(args);
+                
             Environment.CurrentDirectory = Path.GetDirectoryName(scriptPath);
-            var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(arguments), null } });
+            var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), null } });
             task.Wait();
         }
 

@@ -1,8 +1,9 @@
 // Run with CSharpScriptRunner: https://github.com/ArgusMagnus/CSharpScriptRunner/releases
 //
 // Arguments:
-// Arguments are received in the global variable 'Args' which is of type 'IReadOnlyDictionary<string, string>'.
-// Arguments are passed to the script in the format "-argName argValue". When no 'argValue' is specified,
+// Arguments are received in the global variable 'Args' which is of type 'string[]'.
+// The Script.ParseArguments method expects that the arguments were passed to
+// the script in the format "-argName argValue". When no 'argValue' is specified,
 // the value is assumed to be "True".
 // Example: CSharpScriptRunner.exe Script.csx -switch1 -arg1 Hello -arg2 World
 //
@@ -21,7 +22,7 @@ Script.WriteLine($"Executing script '{Script.ScriptPath}'...", ConsoleColor.Gree
 Script.WriteLine("Hallo from script");
 
 Script.WriteLine("Arguments:");
-foreach (var arg in Args)
+foreach (var arg in Script.ParseArguments(Args))
     Script.WriteLine($"{arg.Key}: {arg.Value}");
 
 Script.WriteLine("Press Enter to exit");
@@ -74,6 +75,31 @@ public static class Script
 			Console.ForegroundColor = color;
 		Console.Write(text);
 		Console.ForegroundColor = c;
+	}
+
+	public static IDictionary<string, string> ParseArguments(IEnumerable<string> args)
+	{
+		var arguments = new Dictionary<string, string>();
+		string key = null;
+		foreach (var value in args)
+		{
+			if (value.StartsWith("-"))
+			{
+				if (key != null)
+					arguments[key] = true.ToString();
+				key = value.Substring(1);
+			}
+			else
+			{
+				if (key == null)
+					throw new ArgumentNullException(value, "The parameter is missing its name.");
+				arguments[key] = value;
+				key = null;
+			}
+		}
+		if (key != null)
+			arguments[key] = true.ToString();
+		return arguments;
 	}
 }
 
