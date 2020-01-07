@@ -158,7 +158,6 @@ namespace CSharpScriptRunner
         static IDictionary<string, string> ParseArguments(IEnumerable<string> args)
         {
             var arguments = new Dictionary<string, string>();
-            arguments["ThisScriptPath"] = Path.GetFullPath(args.First());
             string key = null;
             foreach (var value in args.Skip(1))
             {
@@ -186,11 +185,15 @@ namespace CSharpScriptRunner
             config = null;
             var lines = File.ReadAllLines(scriptFile);
             Console.WriteLine($"Compiling script {scriptFile}...");
-            var compilation = CSharpScript.Create(string.Join(Environment.NewLine, lines), ScriptOptions.Default.WithEmitDebugInformation(true), typeof(ScriptGlobals)).GetCompilation();
+            var options = ScriptOptions.Default
+                .WithEmitDebugInformation(true)
+                .WithFilePath(scriptFile)
+                ;
+            var compilation = CSharpScript.Create(string.Join(Environment.NewLine, lines), options, typeof(ScriptGlobals)).GetCompilation();
             var result = compilation.Emit(assemblyFile);
             PrintCompilationDiagnostics(result, lines);
             if (!result.Success)
-            {                
+            {
                 System.Threading.Thread.Sleep(5000);
                 return false;
             }
@@ -242,9 +245,9 @@ namespace CSharpScriptRunner
                     Console.ResetColor();
                 }
             }
-            
+
             LoadPackages(scriptPath);
-                
+
             var cacheFileBase = GetCacheFilenameBase(scriptPath);
             var assemblyFile = cacheFileBase + ".dll";
             var hashFile = cacheFileBase + ".hash";
@@ -309,7 +312,7 @@ namespace CSharpScriptRunner
         {
             var templates = typeof(Program).Assembly.GetManifestResourceNames()
                 .ToDictionary(x => Path.GetExtension(Path.GetFileNameWithoutExtension(x)).Substring(1), StringComparer.OrdinalIgnoreCase);
-            
+
             if (template == null)
             {
                 Console.Write("Available templates: ");

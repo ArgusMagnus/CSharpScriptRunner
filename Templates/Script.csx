@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 
+Script.WriteLine($"Executing script '{Script.ScriptPath}'...", ConsoleColor.Green);
 Script.WriteLine("Hallo from script");
 
 Script.WriteLine("Arguments:");
@@ -30,6 +31,11 @@ Console.ReadLine();
 
 public static class Script
 {
+	static string GetScriptPath([System.Runtime.CompilerServices.CallerFilePath] string path = null) => path;
+	public static string ScriptPath { get; } = GetScriptPath();
+	public static string ScriptDirectory { get; } = System.IO.Path.GetDirectoryName(ScriptPath);
+	public static string ScriptFilename { get; } = System.IO.Path.GetFileName(ScriptPath);
+
 	static readonly IntPtr _consoleWindow = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
 
 	[System.Runtime.InteropServices.DllImport("user32.dll")]
