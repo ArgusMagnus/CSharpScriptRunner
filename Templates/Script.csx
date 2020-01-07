@@ -11,9 +11,9 @@
 // .NET assemblies can be referenced with the '#r "AssemblyName"' directive, for example:
 // #r "PresentationFramework"
 // #r "System.Windows.Forms"
-// References to NuGet packages can be added by adding a line which matches the Regex:
-// ^//#AddPackage\s+"(?<name>[\w.-]+),\s*(?<version>[\w.-]+)"\s*$
-// e.g. //#AddPackage "System.Threading.Thread, 4.3.0"
+// References to NuGet packages can be added with the syntax
+// '#r "nuget: {Package}/{Version}"', for example:
+// #r "nuget: System.Data.OleDb/4.7.0"
 
 using System;
 using System.Collections.Generic;

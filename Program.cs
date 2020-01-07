@@ -155,7 +155,9 @@ namespace CSharpScriptRunner
             return true;
         }
 
-        static bool TryBuild(string scriptFile, string assemblyFile, string hashFile, string configFile, byte[] scriptHash, out Config config)
+        const string NuGetReferenceRegex = @"^\s*#r\s+""\s*nuget:\s*(?<name>[\w\d.-]+)\s*\/\s*(?<version>[\w\d.-]+)\s*""\s*$";
+
+        static bool TryBuild(string scriptFile, string assemblyFile, string hashFile, string configFile, byte[] scriptHash, IEnumerable<Assembly> references, out Config config)
         {
             config = null;
             var lines = File.ReadAllLines(scriptFile);
@@ -163,8 +165,12 @@ namespace CSharpScriptRunner
             var options = ScriptOptions.Default
                 .WithEmitDebugInformation(true)
                 .WithFilePath(scriptFile)
+                .AddReferences(references)
                 ;
-            var compilation = CSharpScript.Create(string.Join(Environment.NewLine, lines), options, typeof(ScriptGlobals)).GetCompilation();
+
+            var script = string.Join(Environment.NewLine, lines);
+            script = Regex.Replace(script, NuGetReferenceRegex, string.Empty, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            var compilation = CSharpScript.Create(script, options, typeof(ScriptGlobals)).GetCompilation();
             var result = compilation.Emit(assemblyFile);
             PrintCompilationDiagnostics(result, lines);
             if (!result.Success)
@@ -187,11 +193,14 @@ namespace CSharpScriptRunner
             return true;
         }
 
-        static void LoadPackages(string scriptPath)
+        static IEnumerable<Assembly> LoadPackages(string scriptPath)
         {
-            var matches = Regex.Matches(File.ReadAllText(scriptPath), @"^//#AddPackage\s+""(?<name>[\w.-]+),\s*(?<version>[\w.-]+)""\s*$", RegexOptions.Multiline);
+            var referencePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var matches = Regex.Matches(File.ReadAllText(scriptPath), NuGetReferenceRegex, RegexOptions.Multiline | RegexOptions.IgnoreCase);
             foreach (Match match in matches)
-                NuGet.LoadPackage(match.Groups["name"].Value, match.Groups["version"].Value).Wait();
+                NuGet.LoadPackage(match.Groups["name"].Value, match.Groups["version"].Value, referencePaths).Wait();
+            foreach (var path in referencePaths)
+                yield return Assembly.LoadFrom(path);
         }
 
         static void RunScript(string[] args)
@@ -221,7 +230,7 @@ namespace CSharpScriptRunner
                 }
             }
 
-            LoadPackages(scriptPath);
+            var nuGetAssemblies = LoadPackages(scriptPath);
 
             var cacheFileBase = GetCacheFilenameBase(scriptPath);
             var assemblyFile = cacheFileBase + ".dll";
@@ -231,7 +240,7 @@ namespace CSharpScriptRunner
 
             if (!TryGetCache(assemblyFile, hashFile, configFile, scriptHash, out var config))
             {
-                if (!TryBuild(scriptPath, assemblyFile, hashFile, configFile, scriptHash, out config))
+                if (!TryBuild(scriptPath, assemblyFile, hashFile, configFile, scriptHash, nuGetAssemblies, out config))
                     return;
             }
 
