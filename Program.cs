@@ -16,6 +16,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis.Scripting.Hosting;
 
 namespace CSharpScriptRunner
 {
@@ -45,8 +46,11 @@ namespace CSharpScriptRunner
             }
             catch (Exception ex)
             {
+                if (ex is AggregateException aggregateException)
+                    ex = aggregateException.InnerException;
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine(ex);
+                Console.ResetColor();
                 System.Threading.Thread.Sleep(5000);
             }
         }
@@ -157,7 +161,7 @@ namespace CSharpScriptRunner
 
         const string NuGetReferenceRegex = @"^\s*#r\s+""\s*nuget:\s*(?<name>[\w\d.-]+)\s*\/\s*(?<version>[\w\d.-]+)\s*""\s*$";
 
-        static bool TryBuild(string scriptFile, string assemblyFile, string hashFile, string configFile, byte[] scriptHash, IEnumerable<Assembly> references, out Config config)
+        static bool TryBuild(string scriptFile, string assemblyFile, string hashFile, string configFile, byte[] scriptHash, IEnumerable<string> references, out Config config)
         {
             config = null;
             var lines = File.ReadAllLines(scriptFile);
@@ -167,9 +171,9 @@ namespace CSharpScriptRunner
                 .WithFilePath(scriptFile)
                 .AddReferences(references)
                 ;
-
+            
             var script = string.Join(Environment.NewLine, lines);
-            script = Regex.Replace(script, NuGetReferenceRegex, string.Empty, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            script = Regex.Replace(script, NuGetReferenceRegex, Environment.NewLine, RegexOptions.Multiline | RegexOptions.IgnoreCase);
             var compilation = CSharpScript.Create(script, options, typeof(ScriptGlobals)).GetCompilation();
             var result = compilation.Emit(assemblyFile);
             PrintCompilationDiagnostics(result, lines);
@@ -193,14 +197,18 @@ namespace CSharpScriptRunner
             return true;
         }
 
-        static IEnumerable<Assembly> LoadPackages(string scriptPath)
+        static IEnumerable<string> LoadPackages(string scriptPath, out InteractiveAssemblyLoader assemblyLoader)
         {
-            var referencePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var buildReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var runtimeReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var matches = Regex.Matches(File.ReadAllText(scriptPath), NuGetReferenceRegex, RegexOptions.Multiline | RegexOptions.IgnoreCase);
             foreach (Match match in matches)
-                NuGet.LoadPackage(match.Groups["name"].Value, match.Groups["version"].Value, referencePaths).Wait();
-            foreach (var path in referencePaths)
-                yield return Assembly.LoadFrom(path);
+                NuGet.LoadPackage(match.Groups["name"].Value, match.Groups["version"].Value, buildReferences, runtimeReferences).Wait();
+
+            assemblyLoader = new InteractiveAssemblyLoader();
+            foreach (var path in runtimeReferences)
+                assemblyLoader.RegisterDependency(Assembly.LoadFrom(path));
+            return buildReferences;
         }
 
         static void RunScript(string[] args)
@@ -230,7 +238,7 @@ namespace CSharpScriptRunner
                 }
             }
 
-            var nuGetAssemblies = LoadPackages(scriptPath);
+            var buildReferences = LoadPackages(scriptPath, out var assemblyLoader);
 
             var cacheFileBase = GetCacheFilenameBase(scriptPath);
             var assemblyFile = cacheFileBase + ".dll";
@@ -240,7 +248,7 @@ namespace CSharpScriptRunner
 
             if (!TryGetCache(assemblyFile, hashFile, configFile, scriptHash, out var config))
             {
-                if (!TryBuild(scriptPath, assemblyFile, hashFile, configFile, scriptHash, nuGetAssemblies, out config))
+                if (!TryBuild(scriptPath, assemblyFile, hashFile, configFile, scriptHash, buildReferences, out config))
                     return;
             }
 
@@ -253,7 +261,7 @@ namespace CSharpScriptRunner
                 return;
                 
             Environment.CurrentDirectory = Path.GetDirectoryName(scriptPath);
-            var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), null } });
+            var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), assemblyLoader } });
             task.Wait();
         }
 

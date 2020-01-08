@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- If the tfm is changed, it needs to be changed in NuGet.cs as well -->
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
@@ -21,5 +20,41 @@
     <PackageReference Include="NuGet.Protocol" Version="5.4.0" />
     <PackageReference Include="NuGet.Resolver" Version="5.4.0" />
   </ItemGroup>
+
+  <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <BuildInfoFile>$(IntermediateOutputPath)BuildInfo.cs</BuildInfoFile>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+      <MyTextLines>
+namespace CSharpScriptRunner
+{
+  static class BuildInfo
+  {
+    public const string RuntimeIdentifier = "$(RuntimeIdentifier)"%3B
+  }
+}
+      </MyTextLines> 
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">
+      <MyTextLines>
+namespace CSharpScriptRunner
+{
+  static class BuildInfo
+  {
+    public const string RuntimeIdentifier = "win-x64"%3B
+  }
+}
+      </MyTextLines> 
+    </PropertyGroup>
+    <WriteLinesToFile
+        File="$(BuildInfoFile)"
+        Overwrite="true"
+        Lines="$(MyTextLines)" />
+
+    <ItemGroup>
+      <Compile Include="$(BuildInfoFile)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

@@ -20,13 +20,15 @@ namespace CSharpScriptRunner
 {
     static class NuGet
     {
-        public static async Task LoadPackage(string packageId, string packageVersion, HashSet<string> assemblyPaths)
+        public static async Task LoadPackage(string packageId, string packageVersion, HashSet<string> buildReferences, HashSet<string> runtimeReferences)
         {
-            var version = NuGetVersion.Parse(packageVersion);
-            var nuGetFramework = NuGetFramework.ParseFolder("netcoreapp3.1");
+            Console.WriteLine($"Loading package '{packageId} ({packageVersion})'...");
+            var version = NuGetVersion.Parse(packageVersion);          
+            var nuGetFramework = NuGetFramework.ParseFrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName, DefaultFrameworkNameProvider.Instance);
             var settings = Settings.LoadDefaultSettings(null);
             var sourceRepositoryProvider = new SourceRepositoryProvider(new PackageSourceProvider(settings), Repository.Provider.GetCoreV3());
             var packagesPath = SettingsUtility.GetGlobalPackagesFolder(settings);
+            var runtimeFramework = NuGetFramework.ParseFolder(BuildInfo.RuntimeIdentifier);
 
             using (var cacheContext = new SourceCacheContext())
             {
@@ -59,11 +61,11 @@ namespace CSharpScriptRunner
                 var frameworkReducer = new FrameworkReducer();
 
                 foreach (var packageToInstall in packagesToInstall)
-                {
-                    PackageReaderBase packageReader;
+                {                  
                     var installedPath = packagePathResolver.GetInstalledPath(packageToInstall);
                     if (installedPath == null)
                     {
+                        Console.WriteLine($"Installing package '{packageToInstall.Id} ({packageToInstall.Version})'...");
                         var downloadResource = await packageToInstall.Source.GetResourceAsync<DownloadResource>(CancellationToken.None);
                         var downloadResult = await downloadResource.GetDownloadResourceResultAsync(
                             packageToInstall,
@@ -80,24 +82,34 @@ namespace CSharpScriptRunner
                     }
                     
                     installedPath = packagePathResolver.GetInstalledPath(packageToInstall);
-                    packageReader = new PackageFolderReader(installedPath);
+                    var packageReader = new PackageFolderReader(installedPath);
 
-                    var libItems = packageReader.GetLibItems();
-                    var nearest = frameworkReducer.GetNearest(nuGetFramework, libItems.Select(x => x.TargetFramework));
-                    assemblyPaths.AddRange(libItems
-                        .Where(x => x.TargetFramework.Equals(nearest))
-                        .SelectMany(x => x.Items)
-                        .Where(x => x.EndsWith(".dll"))
-                        .Select(x => Path.Combine(installedPath, x)));
+                    if (buildReferences != null)
+                    {
+                        var items = await packageReader.GetReferenceItemsAsync(CancellationToken.None);
+                        var paths = GetAssemblyPaths(items, frameworkReducer, nuGetFramework, installedPath);
+                        buildReferences.AddRange(paths);
+                    }
 
-                    var frameworkItems = packageReader.GetFrameworkItems();
-                    nearest = frameworkReducer.GetNearest(nuGetFramework, frameworkItems.Select(x => x.TargetFramework));
-
-                    assemblyPaths.AddRange(frameworkItems
-                        .Where(x => x.TargetFramework.Equals(nearest))
-                        .SelectMany(x => x.Items)
-                        .Where(x => x.EndsWith(".dll"))
-                        .Select(x => Path.Combine(installedPath, x)));
+                    if (runtimeReferences != null)
+                    {                        
+                        var items = await packageReader.GetItemsAsync("runtimes", CancellationToken.None);
+                        var nearest = items.Select(x => x.TargetFramework)
+                            .Where(x => x.Framework == runtimeFramework.Framework && (!x.HasProfile ||x.Profile == runtimeFramework.Profile))
+                            .OrderBy(x => x.HasProfile ? 1 : -1)
+                            .FirstOrDefault();
+                        
+                        var runtimeDir = items.FirstOrDefault(x => x.TargetFramework.Equals(nearest))?.Items.FirstOrDefault()?.Split('/').ElementAtOrDefault(1);
+                        if (runtimeDir != null)
+                        {
+                            installedPath = Path.Combine(installedPath, "runtimes", runtimeDir);
+                            packageReader = new PackageFolderReader(installedPath);
+                        }
+                        
+                        items = await packageReader.GetLibItemsAsync(CancellationToken.None);
+                        var paths = GetAssemblyPaths(items, frameworkReducer, nuGetFramework, installedPath);
+                        runtimeReferences.AddRange(paths);                        
+                    }
                 }
             }
         }
@@ -128,6 +140,17 @@ namespace CSharpScriptRunner
                         framework, cacheContext, logger, repositories, availablePackages);
                 }
             }
+        }
+    
+    
+        static IEnumerable<string> GetAssemblyPaths(IEnumerable<FrameworkSpecificGroup> items, FrameworkReducer frameworkReducer, NuGetFramework nuGetFramework, string installedPath)
+        {
+            var nearest = frameworkReducer.GetNearest(nuGetFramework, items.Select(x => x.TargetFramework));
+            return items
+                .Where(x => x.TargetFramework.Equals(nearest))
+                .SelectMany(x => x.Items)
+                .Where(x => x.EndsWith(".dll"))
+                .Select(x => Path.Combine(installedPath, x));
         }
     }
 }
