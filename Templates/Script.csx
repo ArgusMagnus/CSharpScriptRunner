@@ -13,6 +13,7 @@
 // #r "System.Windows.Forms"
 // References to NuGet packages can be added with the syntax
 // '#r "nuget: {Package}/{Version}"', for example:
+// #r "nuget: System.Data.OleDb/4.7.0"
 
 using System;
 using System.Collections.Generic;
