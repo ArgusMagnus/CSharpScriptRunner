@@ -169,18 +169,22 @@ namespace CSharpScriptRunner
             var options = ScriptOptions.Default
                 .WithEmitDebugInformation(true)
                 .WithFilePath(scriptFile)
+                .WithFileEncoding(Encoding.UTF8)
                 .AddReferences(references)
                 ;
-            
+
             var script = string.Join(Environment.NewLine, lines);
             script = Regex.Replace(script, NuGetReferenceRegex, Environment.NewLine, RegexOptions.Multiline | RegexOptions.IgnoreCase);
             var compilation = CSharpScript.Create(script, options, typeof(ScriptGlobals)).GetCompilation();
-            var result = compilation.Emit(assemblyFile);
-            PrintCompilationDiagnostics(result, lines);
-            if (!result.Success)
+            using (var stream = File.OpenWrite(assemblyFile))
             {
-                System.Threading.Thread.Sleep(5000);
-                return false;
+                var result = compilation.Emit(stream, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.Embedded));
+                PrintCompilationDiagnostics(result, lines);
+                if (!result.Success)
+                {
+                    System.Threading.Thread.Sleep(5000);
+                    return false;
+                }
             }
 
             File.WriteAllBytes(hashFile, scriptHash);
@@ -259,7 +263,7 @@ namespace CSharpScriptRunner
             var entryPoint = type.GetMethod(config.Method, BindingFlags.Static | BindingFlags.Public);
             if (entryPoint == null)
                 return;
-                
+
             Environment.CurrentDirectory = Path.GetDirectoryName(scriptPath);
             var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), assemblyLoader } });
             task.Wait();

@@ -32,6 +32,7 @@ namespace CSharpScriptRunner
   static class BuildInfo
   {
     public const string RuntimeIdentifier = "$(RuntimeIdentifier)"%3B
+    public const string Configuration = "$(Configuration)"%3B
   }
 }
       </MyTextLines> 
@@ -43,6 +44,7 @@ namespace CSharpScriptRunner
   static class BuildInfo
   {
     public const string RuntimeIdentifier = "win-x64"%3B
+    public const string Configuration = "$(Configuration)"%3B
   }
 }
       </MyTextLines> 

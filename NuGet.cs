@@ -23,7 +23,7 @@ namespace CSharpScriptRunner
         public static async Task LoadPackage(string packageId, string packageVersion, HashSet<string> buildReferences, HashSet<string> runtimeReferences)
         {
             Console.WriteLine($"Loading package '{packageId} ({packageVersion})'...");
-            var version = NuGetVersion.Parse(packageVersion);          
+            var version = NuGetVersion.Parse(packageVersion);
             var nuGetFramework = NuGetFramework.ParseFrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName, DefaultFrameworkNameProvider.Instance);
             var settings = Settings.LoadDefaultSettings(null);
             var sourceRepositoryProvider = new SourceRepositoryProvider(new PackageSourceProvider(settings), Repository.Provider.GetCoreV3());
@@ -61,7 +61,7 @@ namespace CSharpScriptRunner
                 var frameworkReducer = new FrameworkReducer();
 
                 foreach (var packageToInstall in packagesToInstall)
-                {                  
+                {
                     var installedPath = packagePathResolver.GetInstalledPath(packageToInstall);
                     if (installedPath == null)
                     {
@@ -80,7 +80,7 @@ namespace CSharpScriptRunner
                             packageExtractionContext,
                             CancellationToken.None);
                     }
-                    
+
                     installedPath = packagePathResolver.GetInstalledPath(packageToInstall);
                     var packageReader = new PackageFolderReader(installedPath);
 
@@ -92,23 +92,23 @@ namespace CSharpScriptRunner
                     }
 
                     if (runtimeReferences != null)
-                    {                        
+                    {
                         var items = await packageReader.GetItemsAsync("runtimes", CancellationToken.None);
                         var nearest = items.Select(x => x.TargetFramework)
-                            .Where(x => x.Framework == runtimeFramework.Framework && (!x.HasProfile ||x.Profile == runtimeFramework.Profile))
+                            .Where(x => x.Framework == runtimeFramework.Framework && (!x.HasProfile || x.Profile == runtimeFramework.Profile))
                             .OrderBy(x => x.HasProfile ? 1 : -1)
                             .FirstOrDefault();
-                        
+
                         var runtimeDir = items.FirstOrDefault(x => x.TargetFramework.Equals(nearest))?.Items.FirstOrDefault()?.Split('/').ElementAtOrDefault(1);
                         if (runtimeDir != null)
                         {
                             installedPath = Path.Combine(installedPath, "runtimes", runtimeDir);
                             packageReader = new PackageFolderReader(installedPath);
                         }
-                        
+
                         items = await packageReader.GetLibItemsAsync(CancellationToken.None);
                         var paths = GetAssemblyPaths(items, frameworkReducer, nuGetFramework, installedPath);
-                        runtimeReferences.AddRange(paths);                        
+                        runtimeReferences.AddRange(paths);
                     }
                 }
             }
@@ -141,8 +141,8 @@ namespace CSharpScriptRunner
                 }
             }
         }
-    
-    
+
+
         static IEnumerable<string> GetAssemblyPaths(IEnumerable<FrameworkSpecificGroup> items, FrameworkReducer frameworkReducer, NuGetFramework nuGetFramework, string installedPath)
         {
             var nearest = frameworkReducer.GetNearest(nuGetFramework, items.Select(x => x.TargetFramework));
