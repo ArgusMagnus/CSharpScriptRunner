@@ -34,6 +34,8 @@ namespace CSharpScriptRunner
         [STAThread]
         static void Main(string[] args)
         {
+            Console.WriteLine($"{nameof(CSharpScriptRunner)}, {BuildInfo.ReleaseTag}");
+
             if (args == null || args.Length == 0)
                 return;
 
