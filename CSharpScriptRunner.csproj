@@ -5,6 +5,7 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <ReleaseTag>dev</ReleaseTag>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,6 +34,7 @@ namespace CSharpScriptRunner
   {
     public const string RuntimeIdentifier = "$(RuntimeIdentifier)"%3B
     public const string Configuration = "$(Configuration)"%3B
+    public const string ReleaseTag = "$(ReleaseTag)"%3B
   }
 }
       </MyTextLines> 
@@ -45,6 +47,7 @@ namespace CSharpScriptRunner
   {
     public const string RuntimeIdentifier = "win-x64"%3B
     public const string Configuration = "$(Configuration)"%3B
+    public const string ReleaseTag = "$(ReleaseTag)"%3B
   }
 }
       </MyTextLines> 

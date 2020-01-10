@@ -34,6 +34,8 @@ namespace CSharpScriptRunner
         [STAThread]
         static void Main(string[] args)
         {
+            Console.WriteLine($"{nameof(CSharpScriptRunner)}, {BuildInfo.ReleaseTag}");
+
             if (args == null || args.Length == 0)
                 return;
 
@@ -169,7 +171,7 @@ namespace CSharpScriptRunner
         {
             config = null;
             var lines = File.ReadAllLines(scriptFile);
-            Console.WriteLine($"Compiling script {scriptFile}...");
+            Console.WriteLine($"Compiling script '{scriptFile}'...");
             var options = ScriptOptions.Default
                 .WithEmitDebugInformation(true)
                 .WithFilePath(scriptFile)
@@ -256,6 +258,11 @@ namespace CSharpScriptRunner
 
             if (!TryGetCache(assemblyFile, hashFile, configFile, scriptHash, out var config))
             {
+                // Check for new release only when compiling
+                var newRelease = Updates.CheckForNewRelease().Result;
+                if (newRelease != default)
+                    Console.WriteLine($"A new release of {nameof(CSharpScriptRunner)} ({newRelease.Version}) is available at {newRelease.Url}");
+
                 if (!TryBuild(scriptPath, assemblyFile, hashFile, configFile, scriptHash, buildReferences, out config))
                     return;
             }
