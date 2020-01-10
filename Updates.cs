@@ -23,7 +23,7 @@ namespace CSharpScriptRunner
         {
             const string RequestUri = "https://api.github.com/repos/ArgusMagnus/CSharpScriptRunner/releases/latest";
 
-            if (!BuildInfo.ReleaseTag.StartsWith('v') || !Version.TryParse(BuildInfo.ReleaseTag, out var version))
+            if (!BuildInfo.ReleaseTag.StartsWith('v') || !Version.TryParse(BuildInfo.ReleaseTag.Substring(1), out var version))
                 return default;
 
             using (var httpClient = new HttpClient())
