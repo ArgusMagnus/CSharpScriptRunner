@@ -17,6 +17,7 @@ using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.Scripting.Hosting;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace CSharpScriptRunner
 {
@@ -30,6 +31,14 @@ namespace CSharpScriptRunner
     static class Program
     {
         const string CmdAlias = "csx";
+        static readonly string CachePath = Path.Combine(Path.GetTempPath(), nameof(CSharpScriptRunner));
+
+        static class Verbs
+        {
+            public const string Install = "install";
+            public const string New = "new";
+            public const string ClearCache = "clear-cache";
+        }
 
         [STAThread]
         static void Main(string[] args)
@@ -37,26 +46,43 @@ namespace CSharpScriptRunner
             Console.WriteLine($"{nameof(CSharpScriptRunner)}, {BuildInfo.ReleaseTag}");
 
             if (args == null || args.Length == 0)
+            {
+                PrintHelp();
                 return;
+            }
 
             try
             {
-                if (args[0] == "install")
-                    Install();
-                else if (args[0] == "new")
-                    CreateNew(args.Length > 1 ? args[1] : null);
-                else
-                    RunScript(args);
+                switch (args[0].ToLowerInvariant())
+                {
+                    case Verbs.Install: Install(); break;
+                    case Verbs.New: CreateNew(args.Length > 1 ? args[1] : null); break;
+                    case Verbs.ClearCache: ClearCache(); break; 
+                    default: RunScript(args); break;
+                }
             }
             catch (Exception ex)
             {
                 if (ex is AggregateException aggregateException)
                     ex = aggregateException.InnerException;
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine(ex);
-                Console.ResetColor();
+                WriteLine(ex.ToString(), ConsoleColor.Red);
                 System.Threading.Thread.Sleep(5000);
             }
+        }
+
+        static void PrintHelp()
+        {
+            var exe = nameof(CSharpScriptRunner);
+            Console.WriteLine($"Alias: {CmdAlias}");
+            Console.WriteLine($"{exe} ScriptFilePath [args]");
+            Console.WriteLine($"        Executes the specified script.");
+            Console.WriteLine($"{exe} {Verbs.Install}");
+            Console.WriteLine($"        Installs {exe} for the current user.");
+            Console.WriteLine($"{exe} {Verbs.New} [template]");
+            Console.WriteLine($"        If a template name is provided, a new script file [template].csx is created.");
+            Console.WriteLine($"        If the template name is omitted, the available templates are listed.");
+            Console.WriteLine($"{exe} {Verbs.ClearCache}");
+            Console.WriteLine($"        Cleares the cache of previously compiled scripts.");
         }
 
         static void Install()
@@ -115,9 +141,7 @@ namespace CSharpScriptRunner
                 regKeyCommand.SetValue(string.Empty, $"\"{newPath}\" \"%1\"");
             }
 
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("Installation was successful.");
-            Console.ResetColor();
+            WriteLine("Installation was successful.", ConsoleColor.Green);
             System.Threading.Thread.Sleep(5000);
         }
 
@@ -129,9 +153,8 @@ namespace CSharpScriptRunner
                 var result = new StringBuilder(bytes.Length * 2);
                 foreach (var b in bytes)
                     result.Append(b.ToString("X2"));
-                var dir = Path.Combine(Path.GetTempPath(), nameof(CSharpScriptRunner));
-                Directory.CreateDirectory(dir);
-                return Path.Combine(dir, result.ToString());
+                Directory.CreateDirectory(CachePath);
+                return Path.Combine(CachePath, result.ToString());
             }
         }
 
@@ -182,6 +205,7 @@ namespace CSharpScriptRunner
             var script = string.Join(Environment.NewLine, lines);
             script = Regex.Replace(script, NuGetReferenceRegex, Environment.NewLine, RegexOptions.Multiline | RegexOptions.IgnoreCase);
             var compilation = CSharpScript.Create(script, options, typeof(ScriptGlobals)).GetCompilation();
+            //compilation = compilation.WithOptions(compilation.Options.WithOutputKind(OutputKind.ConsoleApplication));
             using (var stream = File.OpenWrite(assemblyFile))
             {
                 var result = compilation.Emit(stream, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.Embedded));
@@ -242,9 +266,7 @@ namespace CSharpScriptRunner
                         return;
                     }
 
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine($"Warning: Runtime '{runtimeExt}' was not found. Proceeding anyway...");
-                    Console.ResetColor();
+                    WriteLine($"Warning: Runtime '{runtimeExt}' was not found. Proceeding anyway...", ConsoleColor.Yellow);
                 }
             }
 
@@ -317,6 +339,7 @@ namespace CSharpScriptRunner
         static void CreateNew(string template)
         {
             var templates = typeof(Program).Assembly.GetManifestResourceNames()
+                .Where(x => string.Equals(Path.GetExtension(x), ".csx", StringComparison.OrdinalIgnoreCase))
                 .ToDictionary(x => Path.GetExtension(Path.GetFileNameWithoutExtension(x)).Substring(1), StringComparer.OrdinalIgnoreCase);
 
             if (template == null)
@@ -324,23 +347,19 @@ namespace CSharpScriptRunner
                 Console.Write("Available templates: ");
                 Console.WriteLine(string.Join(", ", templates.Keys));
                 Console.Write("Enter the name of the template you wish to create: ");
-                template = Console.ReadLine();
+                template = Console.ReadLine().Trim();
             }
 
             if (!templates.TryGetValue(template, out var resName))
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"The template '{template}' does not exists.");
-                Console.ResetColor();
+                WriteLine($"The template '{template}' does not exists.", ConsoleColor.Red);
                 return;
             }
 
             var filename = template + ".csx";
             if (File.Exists(filename))
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"The file '{filename} already exists.");
-                Console.ResetColor();
+                WriteLine($"The file '{filename} already exists.", ConsoleColor.Red);
                 return;
             }
 
@@ -350,8 +369,28 @@ namespace CSharpScriptRunner
                 res.CopyTo(file);
             }
 
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"The file '{filename}' was created.");
+            WriteLine($"The file '{filename}' was created.", ConsoleColor.Green);
+        }
+
+        static void ClearCache()
+        {
+            if (!Directory.Exists(CachePath))
+                return;
+
+            Task.WhenAll(Directory.EnumerateFiles(CachePath).Select(path => Task.Run(() =>
+            {
+                try { File.Delete(path); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }))).Wait();
+            WriteLine("Cache cleared", ConsoleColor.Green);
+        }
+
+        static void WriteLine(string line, ConsoleColor color = (ConsoleColor)(-1))
+        {
+            if ((int)color > -1)
+                Console.ForegroundColor = color;
+            Console.WriteLine(line);
             Console.ResetColor();
         }
     }
