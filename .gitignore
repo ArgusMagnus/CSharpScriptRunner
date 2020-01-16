@@ -1,5 +1,6 @@
 bin
 obj
-publish/x64
-publish/x86
+publish/win/x64
+publish/win/x86
+publish/any/any
 .vscode

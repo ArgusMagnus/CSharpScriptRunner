@@ -72,6 +72,10 @@ namespace CSharpScriptRunner
 
         static void PrintHelp()
         {
+            var newRelease = Updates.CheckForNewRelease().Result;
+            if (newRelease != default)
+                Console.WriteLine($"A new release of {nameof(CSharpScriptRunner)} ({newRelease.Version}) is available at {newRelease.Url}");
+
             var exe = nameof(CSharpScriptRunner);
             Console.WriteLine($"Alias: {CmdAlias}");
             Console.WriteLine($"{exe} ScriptFilePath [args]");

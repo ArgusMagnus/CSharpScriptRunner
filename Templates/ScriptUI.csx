@@ -104,7 +104,7 @@ public static class Script
 
 	public static IDictionary<string, string> ParseArguments(IEnumerable<string> args)
 	{
-		var arguments = new Dictionary<string, string>();
+		var arguments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		string key = null;
 		foreach (var value in args)
 		{

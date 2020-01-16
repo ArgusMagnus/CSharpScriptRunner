@@ -33,9 +33,11 @@ jobs:
           $version = "${{ github.ref }}"
           $version = $version.Substring(10)
           echo "::set-env name=RELEASE_TAG::$version"
-          dotnet publish -c Release -r win-x86 -o ./publish/x86 -p:ReleaseTag=$version
-          dotnet publish -c Release -r win-x64 -o ./publish/x64 -p:ReleaseTag=$version
-          Compress-Archive -Path ./publish/* -DestinationPath ./publish/win.zip -CompressionLevel Optimal
+          dotnet publish -c Release -r win-x86 -o ./publish/win/x86 -p:ReleaseTag=$version
+          dotnet publish -c Release -r win-x64 -o ./publish/win/x64 -p:ReleaseTag=$version
+          Compress-Archive -Path ./publish/win -DestinationPath ./publish/win.zip -CompressionLevel Optimal
+          dotnet publish -c Release -o ./publish/any -p:ReleaseTag=$version
+          Compress-Archive -Path ./publish/any -DestinationPath ./publish/any.zip -CompressionLevel Optimal
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1.0.0
@@ -46,8 +48,8 @@ jobs:
           release_name: Release ${{ github.ref }}
           draft: false
           prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset 
+      - name: Upload Release Asset (win)
+        id: upload-release-asset-win
         uses: actions/upload-release-asset@v1.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -55,4 +57,14 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./publish/win.zip
           asset_name: CSharpScriptRunner-${{ env.RELEASE_TAG }}-win.zip
+          asset_content_type: application/zip
+      - name: Upload Release Asset (any)
+        id: upload-release-asset-any
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./publish/any.zip
+          asset_name: CSharpScriptRunner-${{ env.RELEASE_TAG }}-any.zip
           asset_content_type: application/zip
