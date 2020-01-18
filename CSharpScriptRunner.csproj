@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Templates/*.csx" />
+    <EmbeddedResource Include="Templates/**/*.*" />
   </ItemGroup>
 
   <ItemGroup>
