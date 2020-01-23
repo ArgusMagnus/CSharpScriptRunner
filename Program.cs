@@ -87,6 +87,8 @@ namespace CSharpScriptRunner
             Console.WriteLine($"{exe} {Verbs.New} [template]");
             Console.WriteLine($"        If a template name is provided, a new script file [template].csx is created.");
             Console.WriteLine($"        If the template name is omitted, the available templates are listed.");
+            Console.WriteLine($"{exe} {Verbs.InitVSCode}");
+            Console.WriteLine($"        Initializes VS Code debugging support (creates .vscode directory)");
             Console.WriteLine($"{exe} {Verbs.ClearCache}");
             Console.WriteLine($"        Cleares the cache of previously compiled scripts.");
         }
@@ -209,7 +211,7 @@ namespace CSharpScriptRunner
                 ;
 
             var script = string.Join(Environment.NewLine, lines);
-            script = Regex.Replace(script, NuGetReferenceRegex, Environment.NewLine, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            script = Regex.Replace(script, NuGetReferenceRegex, match => new string(match.Value.Select(x => (x == '\r' || x == '\n') ? x : ' ').ToArray()), RegexOptions.Multiline | RegexOptions.IgnoreCase);
             var compilation = CSharpScript.Create(script, options, typeof(ScriptGlobals)).GetCompilation();
             //compilation = compilation.WithOptions(compilation.Options.WithOutputKind(OutputKind.ConsoleApplication));
             using (var stream = File.OpenWrite(assemblyFile))
@@ -413,7 +415,7 @@ namespace CSharpScriptRunner
             if (!dir.Exists)
             {
                 dir.Create();
-                // dir.Attributes |= FileAttributes.Hidden;
+                //dir.Attributes |= FileAttributes.Hidden;
             }
 
             foreach (var template in templates)
