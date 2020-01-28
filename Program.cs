@@ -127,6 +127,7 @@ namespace CSharpScriptRunner
                 .Where(x => !x.Contains(nameof(CSharpScriptRunner)))
                 .Append(Path.GetDirectoryName(newPath));
             Environment.SetEnvironmentVariable("Path", string.Join(';', envPath), EnvironmentVariableTarget.User);
+            Environment.SetEnvironmentVariable(nameof(CSharpScriptRunner)+"RuntimesDir", Path.GetDirectoryName(Path.GetDirectoryName(newPath)), EnvironmentVariableTarget.User);
 
             var filetype = ".csx";
 
@@ -211,7 +212,7 @@ namespace CSharpScriptRunner
                 ;
 
             var script = string.Join(Environment.NewLine, lines);
-            script = Regex.Replace(script, NuGetReferenceRegex, match => new string(match.Value.Select(x => (x == '\r' || x == '\n') ? x : ' ').ToArray()), RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            script = Regex.Replace(script, NuGetReferenceRegex, match => new string(match.Value.Select(x => char.IsWhiteSpace(x) ? x : ' ').ToArray()), RegexOptions.Multiline | RegexOptions.IgnoreCase);
             var compilation = CSharpScript.Create(script, options, typeof(ScriptGlobals)).GetCompilation();
             //compilation = compilation.WithOptions(compilation.Options.WithOutputKind(OutputKind.ConsoleApplication));
             using (var stream = File.OpenWrite(assemblyFile))
