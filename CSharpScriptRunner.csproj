@@ -14,13 +14,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="3.4.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="3.6.0" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="4.7.0" />
-    <PackageReference Include="NuGet.Common" Version="5.4.0" />
-    <PackageReference Include="NuGet.Configuration" Version="5.4.0" />
-    <PackageReference Include="NuGet.Packaging" Version="5.4.0" />
-    <PackageReference Include="NuGet.Protocol" Version="5.4.0" />
-    <PackageReference Include="NuGet.Resolver" Version="5.4.0" />
+    <PackageReference Include="NuGet.Common" Version="5.6.0" />
+    <PackageReference Include="NuGet.Configuration" Version="5.6.0" />
+    <PackageReference Include="NuGet.Packaging" Version="5.6.0" />
+    <PackageReference Include="NuGet.Protocol" Version="5.6.0" />
+    <PackageReference Include="NuGet.Resolver" Version="5.6.0" />
   </ItemGroup>
 
   <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">

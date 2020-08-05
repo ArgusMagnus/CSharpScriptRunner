@@ -56,7 +56,7 @@ namespace CSharpScriptRunner
             {
                 switch (args[0].ToLowerInvariant())
                 {
-                    case Verbs.Install: Install(); break;
+                    case Verbs.Install: Install(args.Length > 1 ? string.Equals(args[1], "inplace", StringComparison.OrdinalIgnoreCase) : false); break;
                     case Verbs.New: CreateNew(args.Length > 1 ? args[1] : null); break;
                     case Verbs.ClearCache: ClearCache(); break;
                     case Verbs.InitVSCode: InitVSCode(); break;
@@ -80,8 +80,9 @@ namespace CSharpScriptRunner
 
             var exe = nameof(CSharpScriptRunner);
             Console.WriteLine($"Alias: {CmdAlias}");
-            Console.WriteLine($"{exe} ScriptFilePath [args]");
+            Console.WriteLine($"{exe} [-r<RT>] ScriptFilePath [args]");
             Console.WriteLine($"        Executes the specified script.");
+            Console.WriteLine($"        <RT>: Runtime, e.g. x86/x64");
             Console.WriteLine($"{exe} {Verbs.Install}");
             Console.WriteLine($"        Installs {exe} for the current user.");
             Console.WriteLine($"{exe} {Verbs.New} [template]");
@@ -93,41 +94,50 @@ namespace CSharpScriptRunner
             Console.WriteLine($"        Cleares the cache of previously compiled scripts.");
         }
 
-        static void Install()
+        static void Install(bool installInPlace)
         {
             var oldPath = Process.GetCurrentProcess().MainModule.FileName;
+            var newPath = oldPath;
             var filename = Path.GetFileName(oldPath);
             var oldDir = Path.GetDirectoryName(oldPath);
             var runtimeDir = Path.GetFileName(oldDir);
             oldDir = Path.GetDirectoryName(oldDir);
-            var newDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), nameof(CSharpScriptRunner));
-            if (Directory.Exists(newDir))
-                Directory.Delete(newDir, true);
-            Directory.CreateDirectory(newDir);
-            var newPath = Path.Combine(newDir, runtimeDir, filename);
-
-            foreach (var dir in Directory.EnumerateDirectories(oldDir))
+            if (installInPlace)
             {
-                if (!File.Exists(Path.Combine(dir, filename)))
-                    continue;
+                foreach (var file in Directory.EnumerateFiles(oldDir, filename, SearchOption.AllDirectories))
+                    File.Copy(file, Path.Combine(Path.GetDirectoryName(file), CmdAlias + Path.GetExtension(filename)), true);
+            }
+            else
+            {
+                var newDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), nameof(CSharpScriptRunner));
+                if (Directory.Exists(newDir))
+                    Directory.Delete(newDir, true);
+                Directory.CreateDirectory(newDir);
+                newPath = Path.Combine(newDir, runtimeDir, filename);
 
-                Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(() =>
+                foreach (var dir in Directory.EnumerateDirectories(oldDir))
                 {
-                    var dst = Path.Combine(newDir, file.Substring(oldDir.Length + 1));
-                    Directory.CreateDirectory(Path.GetDirectoryName(dst));
-                    Console.WriteLine($"Copying {dst} ...");
-                    File.Copy(file, dst, true);
-                    if (Path.GetFileName(file) == filename)
-                        File.Copy(file, Path.Combine(Path.GetDirectoryName(dst), CmdAlias + Path.GetExtension(filename)), true);
-                }))).Wait();
+                    if (!File.Exists(Path.Combine(dir, filename)))
+                        continue;
+
+                    Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(() =>
+                    {
+                        var dst = Path.Combine(newDir, file.Substring(oldDir.Length + 1));
+                        Directory.CreateDirectory(Path.GetDirectoryName(dst));
+                        Console.WriteLine($"Copying {dst} ...");
+                        File.Copy(file, dst, true);
+                        if (Path.GetFileName(file) == filename)
+                            File.Copy(file, Path.Combine(Path.GetDirectoryName(dst), CmdAlias + Path.GetExtension(filename)), true);
+                    }))).Wait();
+                }
             }
 
-            var envPath = Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User)
-                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                .Where(x => !x.Contains(nameof(CSharpScriptRunner)))
+            var envPath = (Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User)
+                ?.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(x => !x.Contains(nameof(CSharpScriptRunner))) ?? Array.Empty<string>())
                 .Append(Path.GetDirectoryName(newPath));
             Environment.SetEnvironmentVariable("Path", string.Join(';', envPath), EnvironmentVariableTarget.User);
-            Environment.SetEnvironmentVariable(nameof(CSharpScriptRunner)+"RuntimesDir", Path.GetDirectoryName(Path.GetDirectoryName(newPath)), EnvironmentVariableTarget.User);
+            Environment.SetEnvironmentVariable(nameof(CSharpScriptRunner) + "RuntimesDir", Path.GetDirectoryName(Path.GetDirectoryName(newPath)), EnvironmentVariableTarget.User);
 
             var filetype = ".csx";
 
@@ -254,20 +264,37 @@ namespace CSharpScriptRunner
             return buildReferences;
         }
 
-        static void RunScript(string[] args)
+        static void RunScript(string[] arguments)
         {
-            if (!File.Exists(args[0]))
+            IEnumerable<string> args = arguments;
+            var runtimeExt = string.Empty;
+            while (args.FirstOrDefault()?.StartsWith('-') ?? false)
             {
-                WriteLine($"Script file '{args[0]}' does not exist.", ConsoleColor.Red);
+                var arg = args.First();
+                args = args.Skip(1);
+                if (arg.StartsWith("-r", StringComparison.OrdinalIgnoreCase))
+                    runtimeExt = arg.Substring(2);
+                else
+                {
+                    WriteLine($"Argument {arg} is not recognized.", ConsoleColor.Red);
+                    System.Threading.Thread.Sleep(5000);
+                    return;
+                }
+            }
+
+            var filePath = args.FirstOrDefault();
+            if (!File.Exists(filePath))
+            {
+                WriteLine($"Script file '{filePath}' does not exist.", ConsoleColor.Red);
                 System.Threading.Thread.Sleep(5000);
                 return;
             }
 
-            var scriptPath = Path.GetFullPath(args[0]);
-            var runtimeExt = Path.GetExtension(Path.GetFileNameWithoutExtension(scriptPath));
+            var scriptPath = Path.GetFullPath(filePath);
+            if (string.IsNullOrEmpty(runtimeExt))
+                runtimeExt = Path.GetExtension(Path.GetFileNameWithoutExtension(scriptPath)).TrimStart('.');
             if (!string.IsNullOrEmpty(runtimeExt))
             {
-                runtimeExt = runtimeExt.Substring(1);
                 var exePath = Process.GetCurrentProcess().MainModule.FileName;
                 var filename = Path.GetFileName(exePath);
                 var dir = Path.GetDirectoryName(exePath);
@@ -278,7 +305,7 @@ namespace CSharpScriptRunner
                     exePath = Path.Combine(dir, runtimeExt, filename);
                     if (File.Exists(exePath))
                     {
-                        Process.Start(new ProcessStartInfo(exePath, string.Join(" ", args.Select(x => $"\"{x.Replace("\"", "\\\"")}\""))) { UseShellExecute = false });
+                        Process.Start(new ProcessStartInfo(exePath, string.Join(" ", args.Select(x => $"\"{x.Replace("\"", "\\\"")}\""))) { UseShellExecute = false }).WaitForExit();
                         return;
                     }
 
@@ -305,7 +332,7 @@ namespace CSharpScriptRunner
                     return;
             }
 
-            var assembly = Assembly.LoadFile(assemblyFile);
+            var assembly = Assembly.Load(File.ReadAllBytes(assemblyFile));
             var type = assembly.GetType(config.Type);
             if (type == null)
                 return;
