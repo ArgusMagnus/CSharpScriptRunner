@@ -4,3 +4,4 @@ publish/win/x64
 publish/win/x86
 publish/any/any
 .vscode
+.vs

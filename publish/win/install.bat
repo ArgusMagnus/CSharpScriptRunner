@@ -1,1 +1,1 @@
-.\x86\CSharpScriptRunner.exe install
+.\x64\CSharpScriptRunner.exe install
