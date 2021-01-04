@@ -32,7 +32,7 @@ jobs:
         run: |
           $version = "${{ github.ref }}"
           $version = $version.Substring(10)
-          echo "::set-env name=RELEASE_TAG::$version"
+          echo "RELEASE_TAG=$version" >> $GITHUB_ENV
           dotnet publish -c Release -r win-x86 -o ./publish/win/x86 -p:ReleaseTag=$version
           dotnet publish -c Release -r win-x64 -o ./publish/win/x64 -p:ReleaseTag=$version
           Compress-Archive -Path ./publish/win -DestinationPath ./publish/win.zip -CompressionLevel Optimal
