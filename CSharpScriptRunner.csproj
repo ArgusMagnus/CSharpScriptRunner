@@ -4,6 +4,7 @@
     <AssemblyTitle>C# Script Runner</AssemblyTitle>
     <OutputType>Exe</OutputType>
     <TargetFramework>net5.0-windows</TargetFramework>
+    <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ReleaseTag>dev</ReleaseTag>
