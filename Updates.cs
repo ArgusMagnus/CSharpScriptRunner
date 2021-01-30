@@ -19,9 +19,14 @@ namespace CSharpScriptRunner
 
     static class Updates
     {
+        const string RequestUri = "https://api.github.com/repos/ArgusMagnus/CSharpScriptRunner/releases/latest";
+        public const string PowershellCommand =
+            @"$dir=md ""$Env:Temp\{$(New-Guid)}""; $bkp=$ProgressPreference; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading...'; Invoke-WebRequest (Invoke-RestMethod -Uri '" + RequestUri +
+            @"' | select -Expand assets | select-string -InputObject {$_.browser_download_url} -Pattern '-win\.zip$' | Select -Expand Line -First 1) -OutFile ""$dir\CSX.zip""; Write-Host 'Expanding archive...'; Expand-Archive -Path ""$dir\CSX.zip"" -DestinationPath ""$dir""; & ""$dir\win\x64\CSharpScriptRunner.exe"" 'install'; Remove-Item $dir -Recurse; $ProgressPreference=$bkp; Write-Host 'Done'";
+        
         public static async Task<ReleaseInfo> CheckForNewRelease()
         {
-            const string RequestUri = "https://api.github.com/repos/ArgusMagnus/CSharpScriptRunner/releases/latest";
+            
 
             if (!BuildInfo.ReleaseTag.StartsWith('v') || !Version.TryParse(BuildInfo.ReleaseTag.Substring(1), out var version))
                 return default;

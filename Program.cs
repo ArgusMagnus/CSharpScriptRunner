@@ -76,7 +76,10 @@ namespace CSharpScriptRunner
         {
             var newRelease = Updates.CheckForNewRelease().Result;
             if (newRelease != default)
+            {
                 Console.WriteLine($"A new release of {nameof(CSharpScriptRunner)} ({newRelease.Version}) is available at {newRelease.Url}");
+                Console.WriteLine($"Install with powershell: {Updates.PowershellCommand}");
+            }
 
             var exe = nameof(CSharpScriptRunner);
             Console.WriteLine($"Alias: {CmdAlias}");
@@ -406,10 +409,12 @@ namespace CSharpScriptRunner
                 return;
             }
 
-            using (var res = typeof(Program).Assembly.GetManifestResourceStream(resName))
-            using (var file = File.OpenWrite(filename))
+            using (var res = new StreamReader(typeof(Program).Assembly.GetManifestResourceStream(resName)))
+            using (var file = new StreamWriter(File.OpenWrite(filename), Encoding.UTF8))
             {
-                res.CopyTo(file);
+                var text = res.ReadToEnd();
+                text = text.Replace("{PowershellCommand}", Updates.PowershellCommand);
+                file.Write(text);
             }
 
             WriteLine($"The file '{filename}' was created.", ConsoleColor.Green);

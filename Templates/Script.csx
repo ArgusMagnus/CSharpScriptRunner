@@ -1,4 +1,5 @@
-// Run with CSharpScriptRunner: https://github.com/ArgusMagnus/CSharpScriptRunner/releases
+// Run with CSharpScriptRunner: 	https://github.com/ArgusMagnus/CSharpScriptRunner/releases
+// Install latest with PowerShell: 	{PowershellCommand}
 //
 // Arguments:
 // Arguments are received in the global variable 'Args' which is of type 'string[]'.
