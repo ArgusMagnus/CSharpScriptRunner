@@ -116,7 +116,7 @@ namespace CSharpScriptRunner
                 if (Directory.Exists(newDir))
                     Directory.Delete(newDir, true);
                 Directory.CreateDirectory(newDir);
-                newPath = Path.Combine(newDir, runtimeDir, filename);
+                newPath = Path.Combine(newDir, runtimeDir, "bin", filename);
 
                 foreach (var dir in Directory.EnumerateDirectories(oldDir))
                 {
@@ -140,9 +140,9 @@ namespace CSharpScriptRunner
             var envPath = (Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User)
                 ?.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
                 .Where(x => !x.Contains(nameof(CSharpScriptRunner))) ?? Array.Empty<string>())
-                .Append(Path.GetDirectoryName(newPath));
+                .Append(Path.GetDirectoryName(Path.GetDirectoryName(newPath)));
             Environment.SetEnvironmentVariable("Path", string.Join(';', envPath), EnvironmentVariableTarget.User);
-            Environment.SetEnvironmentVariable(nameof(CSharpScriptRunner) + "RuntimesDir", Path.GetDirectoryName(Path.GetDirectoryName(newPath)), EnvironmentVariableTarget.User);
+            Environment.SetEnvironmentVariable(nameof(CSharpScriptRunner) + "RuntimesDir", Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(newPath))), EnvironmentVariableTarget.User);
 
             var filetype = ".csx";
 
