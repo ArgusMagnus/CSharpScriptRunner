@@ -129,8 +129,8 @@ namespace CSharpScriptRunner
                         Directory.CreateDirectory(Path.GetDirectoryName(dst));
                         Console.WriteLine($"Copying {dst} ...");
                         File.Copy(file, dst, true);
-                        if (Path.GetFileName(file) == filename)
-                            File.Copy(file, Path.Combine(Path.GetDirectoryName(dst), CmdAlias + Path.GetExtension(filename)), true);
+                        if (Path.GetFileName(file) == filename)                        
+                            File.WriteAllText(Path.Combine(Path.GetDirectoryName(dst), $"{CmdAlias}.cmd"), $"@echo off & {filename} %*");
                     }))).Wait();
                 }
             }

@@ -32,9 +32,9 @@ jobs:
         run: |
           $version = "${{ github.ref }}"
           $version = $version.Substring(10)
-          echo "RELEASE_TAG=$version" >> $GITHUB_ENV
-          dotnet publish -c Release -r win-x86 -o ./publish/win/x86 -p:ReleaseTag=$version
-          dotnet publish -c Release -r win-x64 -o ./publish/win/x64 -p:ReleaseTag=$version
+          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_TAG=$version" -Encoding UTF8
+          dotnet publish -c Release -r win-x86 -o ./publish/win/x86 -p:ReleaseTag=$version -p:PublishSingleFile=true
+          dotnet publish -c Release -r win-x64 -o ./publish/win/x64 -p:ReleaseTag=$version -p:PublishSingleFile=true
           Compress-Archive -Path ./publish/win -DestinationPath ./publish/win.zip -CompressionLevel Optimal
           dotnet publish -c Release -o ./publish/any -p:ReleaseTag=$version
           Compress-Archive -Path ./publish/any -DestinationPath ./publish/any.zip -CompressionLevel Optimal
