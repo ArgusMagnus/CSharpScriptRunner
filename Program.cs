@@ -123,15 +123,17 @@ namespace CSharpScriptRunner
                     if (!File.Exists(Path.Combine(dir, filename)))
                         continue;
 
+                    var dstDir = Path.Combine(newDir, Path.GetFileName(dir));
                     Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(() =>
                     {
-                        var dst = Path.Combine(newDir, file.Substring(oldDir.Length + 1));
+                        var dst = Path.Combine(dstDir, "bin", file.Substring(dir.Length + 1));                  
                         Directory.CreateDirectory(Path.GetDirectoryName(dst));
                         Console.WriteLine($"Copying {dst} ...");
                         File.Copy(file, dst, true);
-                        if (Path.GetFileName(file) == filename)                        
-                            File.WriteAllText(Path.Combine(Path.GetDirectoryName(dst), $"{CmdAlias}.cmd"), $"@echo off & {filename} %*");
                     }))).Wait();
+                    
+                    File.WriteAllText(Path.Combine(dstDir, Path.ChangeExtension(filename, ".cmd")), $@"@echo off & ""%~dp0bin\{filename}"" %*");
+                    File.WriteAllText(Path.Combine(dstDir, $"{CmdAlias}.cmd"), $@"@echo off & ""%~dp0bin\{filename}"" %*");
                 }
             }
 
@@ -280,7 +282,6 @@ namespace CSharpScriptRunner
                 else
                 {
                     WriteLine($"Argument {arg} is not recognized.", ConsoleColor.Red);
-                    System.Threading.Thread.Sleep(5000);
                     return;
                 }
             }
@@ -289,7 +290,6 @@ namespace CSharpScriptRunner
             if (!File.Exists(filePath))
             {
                 WriteLine($"Script file '{filePath}' does not exist.", ConsoleColor.Red);
-                System.Threading.Thread.Sleep(5000);
                 return;
             }
 
@@ -300,12 +300,12 @@ namespace CSharpScriptRunner
             {
                 var exePath = Process.GetCurrentProcess().MainModule.FileName;
                 var filename = Path.GetFileName(exePath);
-                var dir = Path.GetDirectoryName(exePath);
+                var dir = Path.GetDirectoryName(Path.GetDirectoryName(exePath));
                 var runtimeDir = Path.GetFileName(dir);
                 dir = Path.GetDirectoryName(dir);
                 if (runtimeExt != runtimeDir)
                 {
-                    exePath = Path.Combine(dir, runtimeExt, filename);
+                    exePath = Path.Combine(dir, runtimeExt, "bin", filename);
                     if (File.Exists(exePath))
                     {
                         Process.Start(new ProcessStartInfo(exePath, string.Join(" ", args.Select(x => $"\"{x.Replace("\"", "\\\"")}\""))) { UseShellExecute = false }).WaitForExit();
