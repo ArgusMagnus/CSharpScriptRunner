@@ -164,7 +164,7 @@ namespace CSharpScriptRunner
             }
 
             WriteLine("Installation was successful.", ConsoleColor.Green);
-            System.Threading.Thread.Sleep(5000);
+            ClearCache();
         }
 
         static string GetCacheFilenameBase(string filename)
