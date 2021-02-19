@@ -29,7 +29,7 @@ foreach (var arg in Script.ParseArguments(Args))
 Script.WriteLine("Press Enter to exit");
 Console.ReadLine();
 
-return; // End of script
+return 0; // End of script
 
 #region Utilities
 

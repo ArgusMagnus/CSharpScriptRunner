@@ -54,7 +54,7 @@ var window = (Window)XamlReader.Parse(@"
 window.DataContext = new Command(() => MessageBox.Show("Hello World!"));
 window.ShowDialog();
 
-return; // End of script
+return 0; // End of script
 
 #region Utilities
 

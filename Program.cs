@@ -113,10 +113,26 @@ namespace CSharpScriptRunner
             else
             {
                 var newDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), nameof(CSharpScriptRunner));
-                if (Directory.Exists(newDir))
-                    Directory.Delete(newDir, true);
-                Directory.CreateDirectory(newDir);
                 newPath = Path.Combine(newDir, runtimeDir, "bin", filename);
+                if (Directory.Exists(newDir))
+                {
+                    WriteLine($"Removing previous installation...");
+                    try
+                    {
+                        if (File.Exists(newPath))
+                            File.Delete(newPath);
+                        Directory.Delete(newDir, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteLine($"Operation failed with {ex.GetType().Name}: {ex.Message}", ConsoleColor.Red);
+                        Console.WriteLine();
+                        var count = Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName).Length - 1;
+                        WriteLine($"Please close all running instances ({count}) and try again:", ConsoleColor.Red);
+                        return;
+                    }
+                }
+                Directory.CreateDirectory(newDir);
 
                 foreach (var dir in Directory.EnumerateDirectories(oldDir))
                 {
@@ -126,12 +142,12 @@ namespace CSharpScriptRunner
                     var dstDir = Path.Combine(newDir, Path.GetFileName(dir));
                     Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(() =>
                     {
-                        var dst = Path.Combine(dstDir, "bin", file.Substring(dir.Length + 1));                  
+                        var dst = Path.Combine(dstDir, "bin", file.Substring(dir.Length + 1));
                         Directory.CreateDirectory(Path.GetDirectoryName(dst));
                         Console.WriteLine($"Copying {dst} ...");
                         File.Copy(file, dst, true);
                     }))).Wait();
-                    
+
                     File.WriteAllText(Path.Combine(dstDir, Path.ChangeExtension(filename, ".cmd")), $@"@echo off & ""%~dp0bin\{filename}"" %*");
                     File.WriteAllText(Path.Combine(dstDir, $"{CmdAlias}.cmd"), $@"@echo off & ""%~dp0bin\{filename}"" %*");
                 }
@@ -146,6 +162,7 @@ namespace CSharpScriptRunner
 
             var filetype = ".csx";
 
+            // https://docs.microsoft.com/en-us/windows/win32/shell/context-menu-handlers
             using (var regKeyExt = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{filetype}", true))
             {
                 var tmp = regKeyExt.GetValue(string.Empty) as string;
@@ -162,6 +179,15 @@ namespace CSharpScriptRunner
             using (var regKeyCommand = regKey.CreateSubKey("command", true))
             {
                 regKey.SetValue(string.Empty, "C# Skript ausführen");
+                regKeyCommand.SetValue(string.Empty, $"\"{newPath}\" \"%1\"");
+            }
+
+            using (var regKey = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Classes\*\shell\CSharpScriptRunner", true))
+            using (var regKeyCommand = regKey.CreateSubKey("command", true))
+            {
+                regKey.SetValue(string.Empty, "C# Skript ausführen");
+                regKey.SetValue("AppliesTo", "System.FileExtension:\"csx\"", RegistryValueKind.String);
+                regKey.SetValue("Position", "Top", RegistryValueKind.String);
                 regKeyCommand.SetValue(string.Empty, $"\"{newPath}\" \"%1\"");
             }
 
@@ -329,7 +355,10 @@ namespace CSharpScriptRunner
                 // Check for new release only when compiling
                 var newRelease = Updates.CheckForNewRelease().Result;
                 if (newRelease != default)
+                {
                     Console.WriteLine($"A new release of {nameof(CSharpScriptRunner)} ({newRelease.Version}) is available at {newRelease.Url}");
+                    Console.WriteLine($"Install with powershell: {Updates.PowershellCommand}");
+                }
 
                 if (!TryBuild(scriptPath, assemblyFile, hashFile, configFile, scriptHash, buildReferences, out config))
                     return;

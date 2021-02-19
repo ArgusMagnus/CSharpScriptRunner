@@ -8,9 +8,8 @@
         {
             "name": ".NET Core Launch (console)",
             "type": "coreclr",
-            "request": "launch",
-            "program": "CSharpScriptRunner",            
-            //"program": "${env:CSharpScriptRunnerRuntimesDir}/x64/CSharpScriptRunner",
+            "request": "launch",          
+            "program": "${env:CSharpScriptRunnerRuntimesDir}/x64/bin/CSharpScriptRunner",
             "args": [ "${file}" ],
             "cwd": "${workspaceFolder}",
             "console": "internalConsole",
