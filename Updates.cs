@@ -26,8 +26,6 @@ namespace CSharpScriptRunner
         
         public static async Task<ReleaseInfo> CheckForNewRelease()
         {
-            
-
             if (!BuildInfo.ReleaseTag.StartsWith('v') || !Version.TryParse(BuildInfo.ReleaseTag.Substring(1), out var version))
                 return default;
 

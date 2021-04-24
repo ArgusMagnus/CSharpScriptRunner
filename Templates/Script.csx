@@ -18,6 +18,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 Script.WriteLine($"Executing script '{Script.ScriptPath}'...", ConsoleColor.Green);
 Script.WriteLine("Hallo from script");
@@ -35,75 +36,74 @@ return 0; // End of script
 
 public static class Script
 {
-	static string GetScriptPath([System.Runtime.CompilerServices.CallerFilePath] string path = null) => path;
-	public static string ScriptPath { get; } = GetScriptPath();
-	public static string ScriptDirectory { get; } = System.IO.Path.GetDirectoryName(ScriptPath);
-	public static string ScriptFilename { get; } = System.IO.Path.GetFileName(ScriptPath);
+    static string GetScriptPath([System.Runtime.CompilerServices.CallerFilePath] string path = null) => path;
+    public static string ScriptPath { get; } = GetScriptPath();
+    public static string ScriptDirectory { get; } = System.IO.Path.GetDirectoryName(ScriptPath);
+    public static string ScriptFilename { get; } = System.IO.Path.GetFileName(ScriptPath);
 
-	static readonly IntPtr _consoleWindow = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+    static readonly IntPtr _consoleWindow = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
 
-	[System.Runtime.InteropServices.DllImport("user32.dll")]
-	static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-	const int SW_HIDE = 0;
-	const int SW_SHOW = 5;
+    const int SW_HIDE = 0;
+    const int SW_SHOW = 5;
 
-	public static void HideConsole() { IsConsoleHidden = true; ShowWindow(_consoleWindow, SW_HIDE); }
-	public static void ShowConsole() { IsConsoleHidden = false; ShowWindow(_consoleWindow, SW_SHOW); }
-	public static bool IsConsoleHidden { get; private set; } = false;
+    public static void HideConsole() { IsConsoleHidden = true; ShowWindow(_consoleWindow, SW_HIDE); }
+    public static void ShowConsole() { IsConsoleHidden = false; ShowWindow(_consoleWindow, SW_SHOW); }
+    public static bool IsConsoleHidden { get; private set; } = false;
 
-	public static void WriteLine(string text, ConsoleColor color = (ConsoleColor)(-1))
-	{
-		var c = Console.ForegroundColor;
-		if ((int)color > -1)
-			Console.ForegroundColor = color;
-		Console.WriteLine(text);
-		Console.ForegroundColor = c;
-	}
-
-    public static void WriteLines(IEnumerable<string> lines, ConsoleColor color = (ConsoleColor)(-1))
+    static readonly object _lock = new();
+    static void DoWrite(ConsoleColor color, Action action)
     {
-        var c = Console.ForegroundColor;
-        if ((int)color > -1)
+        if ((int)color == -1)
+        {
+            action();
+            return;
+        }
+
+        lock (_lock)
+        {
+            var c = Console.ForegroundColor;
             Console.ForegroundColor = color;
-        foreach (var line in lines)
-            Console.WriteLine(line);
-        Console.ForegroundColor = c;
+            action();
+            Console.ForegroundColor = c;
+        }
     }
 
-    public static void Write(string text, ConsoleColor color = (ConsoleColor)(-1))
-	{
-		var c = Console.ForegroundColor;
-		if ((int)color > -1)
-			Console.ForegroundColor = color;
-		Console.Write(text);
-		Console.ForegroundColor = c;
-	}
+    public static void WriteLine(string text, ConsoleColor color = (ConsoleColor)(-1))
+        => DoWrite(color, () => Console.WriteLine(text));
 
-	public static IDictionary<string, string> ParseArguments(IEnumerable<string> args)
-	{
-		var arguments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-		string key = null;
-		foreach (var value in args)
-		{
-			if (value.StartsWith("-"))
-			{
-				if (key != null)
-					arguments[key] = true.ToString();
-				key = value.Substring(1);
-			}
-			else
-			{
-				if (key == null)
-					throw new ArgumentNullException(value, "The parameter is missing its name.");
-				arguments[key] = value;
-				key = null;
-			}
-		}
-		if (key != null)
-			arguments[key] = true.ToString();
-		return arguments;
-	}
+    public static void WriteLines(IEnumerable<string> lines, ConsoleColor color = (ConsoleColor)(-1))
+        => DoWrite(color, () => { foreach (var line in lines) Console.WriteLine(line); });
+
+    public static void Write(string text, ConsoleColor color = (ConsoleColor)(-1))
+        => DoWrite(color, () => Console.Write(text));
+
+    public static IDictionary<string, string> ParseArguments(IEnumerable<string> args)
+    {
+        var arguments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string key = null;
+        foreach (var value in args)
+        {
+            if (value.StartsWith("-"))
+            {
+                if (key != null)
+                    arguments[key] = true.ToString();
+                key = value.Substring(1);
+            }
+            else
+            {
+                if (key == null)
+                    throw new ArgumentNullException(value, "The parameter is missing its name.");
+                arguments[key] = value;
+                key = null;
+            }
+        }
+        if (key != null)
+            arguments[key] = true.ToString();
+        return arguments;
+    }
 }
 
 #endregion

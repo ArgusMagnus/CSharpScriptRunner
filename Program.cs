@@ -10,6 +10,7 @@ using Microsoft.Win32;
 using System.Security.Cryptography;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis;
@@ -18,6 +19,7 @@ using Microsoft.CodeAnalysis.Scripting;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.Scripting.Hosting;
 using Microsoft.CodeAnalysis.CSharp;
+using System.Threading;
 
 namespace CSharpScriptRunner
 {
@@ -35,20 +37,60 @@ namespace CSharpScriptRunner
 
         static class Verbs
         {
+            public const string Version = "--version";
             public const string Install = "install";
             public const string New = "new";
             public const string ClearCache = "clear-cache";
             public const string InitVSCode = "init-vscode";
         }
 
+        sealed class CurrentThreadSynchronizationContext : System.Threading.SynchronizationContext
+        {
+            readonly BlockingCollection<(SendOrPostCallback Callback, object State, ManualResetEventSlim Signal)> _queue = new();
+
+            CurrentThreadSynchronizationContext() { }
+
+            public override void Send(SendOrPostCallback d, object state)
+            {
+                var signal = new ManualResetEventSlim(false);
+                _queue.Add((d, state, signal));
+                signal.Wait();
+            }
+
+            public override void Post(SendOrPostCallback d, object state)
+            {
+                _queue.Add((d, state, null));
+            }
+
+            public static void Run(Func<Task> main)
+            {
+                var syncCtx = new CurrentThreadSynchronizationContext();
+                SynchronizationContext.SetSynchronizationContext(syncCtx);
+                var mainTask = main();
+                mainTask.ContinueWith(t => syncCtx._queue.CompleteAdding());
+                foreach (var item in syncCtx._queue.GetConsumingEnumerable())
+                {
+                    item.Callback(item.State);
+                    item.Signal?.Set();
+                }
+                mainTask.Wait();
+            }
+        }
+
         [STAThread]
+        // Must run on STA thread (for WinForms/WPF support)
         static void Main(string[] args)
+        {
+            CurrentThreadSynchronizationContext.Run(() => MainAsync(args));
+        }
+
+        static async Task MainAsync(string[] args)
         {
             Console.WriteLine($"{nameof(CSharpScriptRunner)}, {BuildInfo.ReleaseTag}");
 
             if (args == null || args.Length == 0)
             {
-                PrintHelp();
+                await PrintHelp();
                 return;
             }
 
@@ -56,11 +98,12 @@ namespace CSharpScriptRunner
             {
                 switch (args[0].ToLowerInvariant())
                 {
-                    case Verbs.Install: Install(args.Length > 1 ? string.Equals(args[1], "inplace", StringComparison.OrdinalIgnoreCase) : false); break;
+                    case Verbs.Version: break;
+                    case Verbs.Install: await Install(args.Length > 1 ? string.Equals(args[1], "inplace", StringComparison.OrdinalIgnoreCase) : false); break;
                     case Verbs.New: CreateNew(args.Length > 1 ? args[1] : null); break;
-                    case Verbs.ClearCache: ClearCache(); break;
+                    case Verbs.ClearCache: await ClearCache(); break;
                     case Verbs.InitVSCode: InitVSCode(); break;
-                    default: RunScript(args); break;
+                    default: await RunScript(args); break;
                 }
             }
             catch (Exception ex)
@@ -68,13 +111,12 @@ namespace CSharpScriptRunner
                 if (ex is AggregateException aggregateException)
                     ex = aggregateException.InnerException;
                 WriteLine(ex.ToString(), ConsoleColor.Red);
-                System.Threading.Thread.Sleep(5000);
             }
         }
 
-        static void PrintHelp()
+        static async Task PrintHelp()
         {
-            var newRelease = Updates.CheckForNewRelease().Result;
+            var newRelease = await Updates.CheckForNewRelease();
             if (newRelease != default)
             {
                 Console.WriteLine($"A new release of {nameof(CSharpScriptRunner)} ({newRelease.Version}) is available at {newRelease.Url}");
@@ -97,7 +139,7 @@ namespace CSharpScriptRunner
             Console.WriteLine($"        Cleares the cache of previously compiled scripts.");
         }
 
-        static void Install(bool installInPlace)
+        static async Task Install(bool installInPlace)
         {
             var oldPath = Process.GetCurrentProcess().MainModule.FileName;
             var newPath = oldPath;
@@ -140,13 +182,13 @@ namespace CSharpScriptRunner
                         continue;
 
                     var dstDir = Path.Combine(newDir, Path.GetFileName(dir));
-                    Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(() =>
+                    await Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(() =>
                     {
                         var dst = Path.Combine(dstDir, "bin", file.Substring(dir.Length + 1));
                         Directory.CreateDirectory(Path.GetDirectoryName(dst));
                         Console.WriteLine($"Copying {dst} ...");
                         File.Copy(file, dst, true);
-                    }))).Wait();
+                    })));
 
                     File.WriteAllText(Path.Combine(dstDir, Path.ChangeExtension(filename, ".cmd")), $@"@echo off & ""%~dp0bin\{filename}"" %*");
                     File.WriteAllText(Path.Combine(dstDir, $"{CmdAlias}.cmd"), $@"@echo off & ""%~dp0bin\{filename}"" %*");
@@ -192,7 +234,7 @@ namespace CSharpScriptRunner
             }
 
             WriteLine("Installation was successful.", ConsoleColor.Green);
-            ClearCache();
+            await ClearCache();
         }
 
         static string GetCacheFilenameBase(string filename)
@@ -261,10 +303,7 @@ namespace CSharpScriptRunner
                 var result = compilation.Emit(stream, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.Embedded));
                 PrintCompilationDiagnostics(result, lines);
                 if (!result.Success)
-                {
-                    System.Threading.Thread.Sleep(5000);
-                    return false;
-                }
+                        return false;
             }
 
             File.WriteAllBytes(hashFile, scriptHash);
@@ -281,21 +320,22 @@ namespace CSharpScriptRunner
             return true;
         }
 
-        static IEnumerable<string> LoadPackages(string scriptPath, out InteractiveAssemblyLoader assemblyLoader)
+        static async Task<(IEnumerable<string> BuildReferences, InteractiveAssemblyLoader assemblyLoader1)> LoadPackages(string scriptPath)
         {
             var buildReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var runtimeReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var matches = Regex.Matches(File.ReadAllText(scriptPath), NuGetReferenceRegex, RegexOptions.Multiline | RegexOptions.IgnoreCase);
             foreach (Match match in matches)
-                NuGet.LoadPackage(match.Groups["name"].Value, match.Groups["version"].Value, buildReferences, runtimeReferences).Wait();
+                await NuGet.LoadPackage(match.Groups["name"].Value, match.Groups["version"].Value, buildReferences, runtimeReferences);
 
-            assemblyLoader = new InteractiveAssemblyLoader();
+            var assemblyLoader = new InteractiveAssemblyLoader();
             foreach (var path in runtimeReferences)
                 assemblyLoader.RegisterDependency(Assembly.LoadFrom(path));
-            return buildReferences;
+            return (buildReferences, assemblyLoader);
         }
 
-        static void RunScript(string[] arguments)
+        
+        static async Task RunScript(string[] arguments)
         {
             IEnumerable<string> args = arguments;
             var runtimeExt = string.Empty;
@@ -342,7 +382,7 @@ namespace CSharpScriptRunner
                 }
             }
 
-            var buildReferences = LoadPackages(scriptPath, out var assemblyLoader);
+            var (buildReferences, assemblyLoader) = await LoadPackages(scriptPath);
 
             var cacheFileBase = GetCacheFilenameBase(scriptPath);
             var assemblyFile = cacheFileBase + ".dll";
@@ -353,7 +393,7 @@ namespace CSharpScriptRunner
             if (!TryGetCache(assemblyFile, hashFile, configFile, scriptHash, out var config))
             {
                 // Check for new release only when compiling
-                var newRelease = Updates.CheckForNewRelease().Result;
+                var newRelease = await Updates.CheckForNewRelease();
                 if (newRelease != default)
                 {
                     Console.WriteLine($"A new release of {nameof(CSharpScriptRunner)} ({newRelease.Version}) is available at {newRelease.Url}");
@@ -372,9 +412,9 @@ namespace CSharpScriptRunner
             if (entryPoint == null)
                 return;
 
-            Environment.CurrentDirectory = Path.GetDirectoryName(scriptPath);
+            // Environment.CurrentDirectory = Path.GetDirectoryName(scriptPath);
             var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), assemblyLoader } });
-            task.Wait();
+            await task;
         }
 
         static void PrintCompilationDiagnostics(EmitResult result, string[] lines)
@@ -413,6 +453,23 @@ namespace CSharpScriptRunner
 
         static void CreateNew(string template)
         {
+            // Script method:
+            // public static bool ExitAndUpdateEngine()
+            // {
+            //     var count = System.Diagnostics.Process.GetProcessesByName(System.Diagnostics.Process.GetCurrentProcess().ProcessName).Length - 1;
+            //     if (count > 0)
+            //     {
+            //         Script.WriteLines(new[] {
+            //             "The script engine cannot be updated, while there are running script instances.",
+            //             $"There are currently {count} running script instances." }, ConsoleColor.Yellow);
+            //         return false;
+            //     }
+            // 	var cmd = "{PowershellCommandEscaped}".Replace("\"", "\\\"");
+            //     System.Diagnostics.Process.Start(new ProcessStartInfo { FileName = "powershell", Arguments = $"-NoExit -Command \"{cmd}\"", UseShellExecute = true });
+            //     Environment.Exit(0);
+            //     return true;
+            // }
+
             var templates = typeof(Program).Assembly.GetManifestResourceNames()
                 .Where(x => string.Equals(Path.GetExtension(x), ".csx", StringComparison.OrdinalIgnoreCase))
                 .ToDictionary(x => Path.GetExtension(Path.GetFileNameWithoutExtension(x)).Substring(1), StringComparer.OrdinalIgnoreCase);
@@ -442,24 +499,26 @@ namespace CSharpScriptRunner
             using (var file = new StreamWriter(File.OpenWrite(filename), Encoding.UTF8))
             {
                 var text = res.ReadToEnd();
-                text = text.Replace("{PowershellCommand}", Updates.PowershellCommand);
+                text = text
+                    .Replace("{PowershellCommand}", Updates.PowershellCommand)
+                    .Replace("{PowershellCommandEscaped}", Updates.PowershellCommand.Replace("\\", "\\\\").Replace("\"", "\\\""));
                 file.Write(text);
             }
 
             WriteLine($"The file '{filename}' was created.", ConsoleColor.Green);
         }
 
-        static void ClearCache()
+        static async Task ClearCache()
         {
             if (!Directory.Exists(CachePath))
                 return;
 
-            Task.WhenAll(Directory.EnumerateFiles(CachePath).Select(path => Task.Run(() =>
+            await Task.WhenAll(Directory.EnumerateFiles(CachePath).Select(path => Task.Run(() =>
             {
                 try { File.Delete(path); }
                 catch (IOException) { }
                 catch (UnauthorizedAccessException) { }
-            }))).Wait();
+            })));
             WriteLine("Cache cleared", ConsoleColor.Green);
         }
 
