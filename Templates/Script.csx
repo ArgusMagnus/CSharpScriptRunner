@@ -34,12 +34,13 @@ return 0; // End of script
 
 #region Utilities
 
-public static class Script
+static class Script
 {
     static string GetScriptPath([System.Runtime.CompilerServices.CallerFilePath] string path = null) => path;
     public static string ScriptPath { get; } = GetScriptPath();
     public static string ScriptDirectory { get; } = System.IO.Path.GetDirectoryName(ScriptPath);
     public static string ScriptFilename { get; } = System.IO.Path.GetFileName(ScriptPath);
+    public static string EngineAlias { get; } = System.IO.Path.GetFileNameWithoutExtension(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);
 
     static readonly IntPtr _consoleWindow = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
 

@@ -35,9 +35,7 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_TAG=$version" -Encoding UTF8
           dotnet publish -c Release -r win-x86 -o ./publish/win/x86 -p:ReleaseTag=$version
           dotnet publish -c Release -r win-x64 -o ./publish/win/x64 -p:ReleaseTag=$version
-          Compress-Archive -Path ./publish/win -DestinationPath ./publish/win.zip -CompressionLevel Optimal
-          dotnet publish -c Release -o ./publish/any -p:ReleaseTag=$version
-          Compress-Archive -Path ./publish/any -DestinationPath ./publish/any.zip -CompressionLevel Optimal
+          Compress-Archive -Path ./publish/win/* -DestinationPath ./publish/win.zip -CompressionLevel Optimal
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1.0.0
@@ -57,14 +55,4 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./publish/win.zip
           asset_name: CSharpScriptRunner-${{ env.RELEASE_TAG }}-win.zip
-          asset_content_type: application/zip
-      - name: Upload Release Asset (any)
-        id: upload-release-asset-any
-        uses: actions/upload-release-asset@v1.0.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./publish/any.zip
-          asset_name: CSharpScriptRunner-${{ env.RELEASE_TAG }}-any.zip
           asset_content_type: application/zip
