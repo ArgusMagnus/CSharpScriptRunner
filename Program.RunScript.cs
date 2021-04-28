@@ -28,7 +28,7 @@ namespace CSharpScriptRunner
         static async Task<ErrorCodes> RunScript(string[] arguments)
         {
             const string NuGetReferenceRegex = @"^\s*#r\s+""\s*nuget:\s*(?<name>[\w\d.-]+)\s*\/\s*(?<version>[\w\d.-]+)\s*""\s*$";
-            
+
             IEnumerable<string> args = arguments;
             var runtimeExt = string.Empty;
             while (args.FirstOrDefault()?.StartsWith('-') ?? false)
@@ -103,7 +103,7 @@ namespace CSharpScriptRunner
             // Environment.CurrentDirectory = Path.GetDirectoryName(scriptPath);
             var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), assemblyLoader } });
             var errorCode = (ErrorCodes?)((await task) as int?) ?? ErrorCodes.OK;
-            if ((errorCode & ErrorCodes.ErrorMask) != default)
+            if (errorCode > ErrorCodes.OK && errorCode <= ErrorCodes.Reserved)
                 return ErrorCodes.ScriptReturnRangeConflict;
             return errorCode;
 

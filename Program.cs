@@ -50,17 +50,18 @@ namespace CSharpScriptRunner
             public const string New = "new";
             public const string ClearCache = "clear-cache";
             public const string InitVSCode = "init-vscode";
+            public const string ListRunning = "list-running";
         }
 
-        enum ErrorCodes : uint
+        enum ErrorCodes
         {
             OK = 0,
-            ErrorMask = 0xFF000000,
-            ScriptReturnRangeConflict = 0x01_00_00_00,
             GenericError,
+            ScriptReturnRangeConflict,
             UnrecognizedArgument,
             ScriptFileDoesNotExist,
             ScriptCompilationFailed,
+            Reserved = 0xFF
         }
 
         [STAThread]
@@ -76,7 +77,7 @@ namespace CSharpScriptRunner
             var dir = Path.Combine(Path.GetDirectoryName(thisProcess.MainModule.FileName), "running");
             Directory.CreateDirectory(dir);
 
-            using var file = new FileStream(Path.Combine(dir, thisProcess.Id.ToString()), FileMode.Create, FileAccess.ReadWrite, FileShare.Read, 512, FileOptions.DeleteOnClose | FileOptions.Asynchronous);
+            using var file = new FileStream(Path.Combine(dir, thisProcess.Id.ToString()), FileMode.Create, FileAccess.Write, FileShare.Read, 512, FileOptions.DeleteOnClose | FileOptions.Asynchronous);
             using (var writer = new StreamWriter(file, null, -1, true))
                 await writer.WriteLineAsync(Environment.CommandLine);
 
@@ -98,6 +99,7 @@ namespace CSharpScriptRunner
                     case Verbs.New: CreateNew(args.Length > 1 ? args[1] : null); break;
                     case Verbs.ClearCache: await ClearCache(); break;
                     case Verbs.InitVSCode: InitVSCode(); break;
+                    case Verbs.ListRunning: await ListRunning(); break;
                     default: return await RunScript(args);
                 }
             }
@@ -129,7 +131,15 @@ namespace CSharpScriptRunner
             Console.WriteLine($"        Initializes VS Code debugging support (creates .vscode directory)");
             Console.WriteLine($"{exe} {Verbs.ClearCache}");
             Console.WriteLine($"        Cleares the cache of previously compiled scripts.");
-        }        
+            Console.WriteLine($"{exe} {Verbs.ListRunning}");
+            Console.WriteLine($"        Lists the currently running script engine instances.");
+            Console.WriteLine($"Returned error codes:");
+            foreach (var code in Enum.GetValues<ErrorCodes>().Where(x => x != ErrorCodes.Reserved))
+                Console.WriteLine($"        - {code,3:D}    {code}");
+            Console.WriteLine($"        - Value returned by script.");
+            Console.WriteLine($"          Values {ErrorCodes.OK + 1:D} - {ErrorCodes.Reserved:D} are reserved by the engine.");
+            Console.WriteLine($"          If a script returns a value in the reserved range, {ErrorCodes.ScriptReturnRangeConflict} will be returned instead.");
+        }
 
         static void WriteLine(string line, ConsoleColor color = (ConsoleColor)(-1))
         {
@@ -137,6 +147,39 @@ namespace CSharpScriptRunner
                 Console.ForegroundColor = color;
             Console.WriteLine(line);
             Console.ResetColor();
+        }
+
+        static async Task ListRunning()
+        {
+            WriteLine("Process ID    RT     Arguments");
+            WriteLine("----------    ---    ---------");
+            using var thisProcess = Process.GetCurrentProcess();
+            var runtimesDir = Path.GetDirectoryName(thisProcess.MainModule.FileName); // bin
+            runtimesDir = Path.GetDirectoryName(runtimesDir); // x64
+            runtimesDir = Path.GetDirectoryName(runtimesDir); // vX.Y.Z
+            foreach (var runtimeDir in Directory.EnumerateDirectories(runtimesDir))
+            {
+                var dir = Path.Combine(runtimeDir, "bin", "running");
+                if (!Directory.Exists(dir))
+                    continue;
+
+                var rt = Path.GetFileName(runtimeDir);
+
+                foreach (var file in Directory.EnumerateFiles(dir))
+                {
+                    var processId = Path.GetFileNameWithoutExtension(file);
+                    if (thisProcess.Id == int.Parse(processId))
+                        continue;
+
+                    using var reader = new StreamReader(new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+                    var args = await reader.ReadToEndAsync().ConfigureAwait(false);
+                    if (args.StartsWith('"'))
+                        args = args.Substring(args.IndexOf('"', 1) + 1).TrimStart();
+                    else
+                        args = args.Split(' ', 2).Last();
+                    WriteLine($"{processId,10}    {rt,-3}    {args}");
+                }
+            }
         }
     }
 }

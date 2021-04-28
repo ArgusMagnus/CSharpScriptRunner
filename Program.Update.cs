@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -6,6 +7,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,6 +15,24 @@ namespace CSharpScriptRunner
 {
     static partial class Program
     {
+        sealed class ReleaseInfo
+        {
+            [JsonPropertyName("tag_name")]
+            public string Version { get; set; }
+
+            [JsonPropertyName("html_url")]
+            public string Url { get; set; }
+
+            [JsonPropertyName("assets")]
+            public List<Asset> Assets { get; set; }
+
+            public sealed class Asset
+            {
+                [JsonPropertyName("browser_download_url")]
+                public string DownloadUrl { get; set; }
+            }
+        }
+        
         static async Task Update()
         {
             const string UpdateMutexName = "C371A9A2-6CBE-43DE-B834-AC8F73E47705";
@@ -95,7 +115,7 @@ namespace CSharpScriptRunner
                 ms.Seek(0, SeekOrigin.Begin);
                 using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
                 {
-                    await Task.WhenAll(archive.Entries.Select(async entry =>
+                    foreach (var entry in archive.Entries)
                     {
                         Console.WriteLine($"Extracting {entry.FullName} ...");
                         var parts = entry.FullName.Split('/');
@@ -105,7 +125,7 @@ namespace CSharpScriptRunner
                         using var src = entry.Open();
                         using var dst = new FileStream(dstPath, FileMode.Create);
                         await src.CopyToAsync(dst);
-                    }));
+                    }
                 }
             }
 

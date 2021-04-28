@@ -40,7 +40,9 @@ static class Script
     public static string ScriptPath { get; } = GetScriptPath();
     public static string ScriptDirectory { get; } = System.IO.Path.GetDirectoryName(ScriptPath);
     public static string ScriptFilename { get; } = System.IO.Path.GetFileName(ScriptPath);
+
     public static string EngineAlias { get; } = System.IO.Path.GetFileNameWithoutExtension(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);
+    public static string EnginePath { get; } = "%CSharpScriptRunnerRuntimesDir%" + System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName.Substring(Environment.GetEnvironmentVariable("CSharpScriptRunnerRuntimesDir").Length);
 
     static readonly IntPtr _consoleWindow = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
 

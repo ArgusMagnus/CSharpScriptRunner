@@ -11,17 +11,31 @@ namespace CSharpScriptRunner
     {
         static async Task Install(bool installInPlace)
         {
-            var oldPath = Process.GetCurrentProcess().MainModule.FileName;
-            var newPath = oldPath;
-            var filename = Path.GetFileName(oldPath);
-            var oldDir = Path.GetDirectoryName(oldPath);
-            var runtimeDir = Path.GetFileName(oldDir);
-            oldDir = Path.GetDirectoryName(oldDir);
-            var newDir = oldDir;
+            var thisPath = Process.GetCurrentProcess().MainModule.FileName;
+            var newPath = thisPath;
+            var filename = Path.GetFileName(thisPath);
+            var valid = false;
 
-            if (!installInPlace)
+            if (installInPlace)
             {
-                newDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), nameof(CSharpScriptRunner), BuildInfo.ReleaseTag);
+                var runtimesDir = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(thisPath)));
+                foreach (var dir in Directory.EnumerateDirectories(runtimesDir))
+                {
+                    if (!File.Exists(Path.Combine(dir, "bin", filename)))
+                        continue;
+
+                    valid = true;
+
+                    File.WriteAllText(Path.Combine(dir, Path.ChangeExtension(filename, ".cmd")), $@"@echo off & ""%~dp0bin\{filename}"" %*");
+                    File.WriteAllText(Path.Combine(dir, $"{CmdAlias}.cmd"), $@"@echo off & ""%~dp0bin\{filename}"" %*");
+                }
+            }
+            else
+            {
+                var oldDir = Path.GetDirectoryName(thisPath);
+                var runtimeDir = Path.GetFileName(oldDir);
+                oldDir = Path.GetDirectoryName(oldDir);
+                var newDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), nameof(CSharpScriptRunner), BuildInfo.ReleaseTag);
                 newPath = Path.Combine(newDir, runtimeDir, "bin", filename);
                 if (Directory.Exists(newDir))
                 {
@@ -42,16 +56,15 @@ namespace CSharpScriptRunner
                     }
                 }
                 Directory.CreateDirectory(newDir);
-            }
 
-            foreach (var dir in Directory.EnumerateDirectories(oldDir))
-            {
-                if (!File.Exists(Path.Combine(dir, filename)))
-                    continue;
-
-                var dstDir = Path.Combine(newDir, Path.GetFileName(dir));
-                if (!installInPlace)
+                foreach (var dir in Directory.EnumerateDirectories(oldDir))
                 {
+                    if (!File.Exists(Path.Combine(dir, filename)))
+                        continue;
+
+                    valid = true;
+
+                    var dstDir = Path.Combine(newDir, Path.GetFileName(dir));
                     await Task.WhenAll(Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true }).Select(file => Task.Run(() =>
                     {
                         var dst = Path.Combine(dstDir, "bin", file.Substring(dir.Length + 1));
@@ -59,10 +72,16 @@ namespace CSharpScriptRunner
                         Console.WriteLine($"Copying {dst} ...");
                         File.Copy(file, dst, true);
                     })));
-                }
 
-                File.WriteAllText(Path.Combine(dstDir, Path.ChangeExtension(filename, ".cmd")), $@"@echo off & ""%~dp0bin\{filename}"" %*");
-                File.WriteAllText(Path.Combine(dstDir, $"{CmdAlias}.cmd"), $@"@echo off & ""%~dp0bin\{filename}"" %*");
+                    File.WriteAllText(Path.Combine(dstDir, Path.ChangeExtension(filename, ".cmd")), $@"@echo off & ""%~dp0bin\{filename}"" %*");
+                    File.WriteAllText(Path.Combine(dstDir, $"{CmdAlias}.cmd"), $@"@echo off & ""%~dp0bin\{filename}"" %*");
+                }
+            }
+
+            if (!valid)
+            {
+                WriteLine("Installation failed", ConsoleColor.Red);
+                return;
             }
 
             var envPath = (Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User)
