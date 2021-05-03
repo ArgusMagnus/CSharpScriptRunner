@@ -9,23 +9,6 @@ namespace CSharpScriptRunner
     {
         static void CreateNew(string template)
         {
-            // Script method:
-            // public static bool ExitAndUpdateEngine()
-            // {
-            //     var count = System.Diagnostics.Process.GetProcessesByName(System.Diagnostics.Process.GetCurrentProcess().ProcessName).Length - 1;
-            //     if (count > 0)
-            //     {
-            //         Script.WriteLines(new[] {
-            //             "The script engine cannot be updated, while there are running script instances.",
-            //             $"There are currently {count} running script instances." }, ConsoleColor.Yellow);
-            //         return false;
-            //     }
-            // 	var cmd = "{PowershellCommandEscaped}".Replace("\"", "\\\"");
-            //     System.Diagnostics.Process.Start(new ProcessStartInfo { FileName = "powershell", Arguments = $"-NoExit -Command \"{cmd}\"", UseShellExecute = true });
-            //     Environment.Exit(0);
-            //     return true;
-            // }
-
             var templates = typeof(Program).Assembly.GetManifestResourceNames()
                 .Where(x => string.Equals(Path.GetExtension(x), ".csx", StringComparison.OrdinalIgnoreCase))
                 .ToDictionary(x => Path.GetExtension(Path.GetFileNameWithoutExtension(x)).Substring(1), StringComparer.OrdinalIgnoreCase);
@@ -40,14 +23,14 @@ namespace CSharpScriptRunner
 
             if (!templates.TryGetValue(template, out var resName))
             {
-                WriteLine($"The template '{template}' does not exists.", ConsoleColor.Red);
+                WriteLineError($"The template '{template}' does not exists.", ConsoleColor.Red);
                 return;
             }
 
             var filename = template + ".csx";
             if (File.Exists(filename))
             {
-                WriteLine($"The file '{filename} already exists.", ConsoleColor.Red);
+                WriteLineError($"The file '{filename} already exists.", ConsoleColor.Red);
                 return;
             }
 

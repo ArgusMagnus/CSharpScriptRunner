@@ -32,7 +32,7 @@ namespace CSharpScriptRunner
                 public string DownloadUrl { get; set; }
             }
         }
-        
+
         static async Task Update()
         {
             const string UpdateMutexName = "C371A9A2-6CBE-43DE-B834-AC8F73E47705";
@@ -40,14 +40,14 @@ namespace CSharpScriptRunner
             using var mutex = new Mutex(true, UpdateMutexName);
             if (!mutex.WaitOne(0, true))
             {
-                WriteLine($"{Verbs.Update} command is already running", ConsoleColor.Red);
+                WriteLineError($"{Verbs.Update} command is already running", ConsoleColor.Red);
                 return;
             }
 
             WriteLine("Checking for new version...");
 
             using var httpClient = new HttpClient();
-            httpClient.Timeout = Timeout.InfiniteTimeSpan;
+            // httpClient.Timeout = Timeout.InfiniteTimeSpan;
             httpClient.DefaultRequestHeaders.Accept.Clear();
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             httpClient.DefaultRequestHeaders.Add("User-Agent", nameof(CSharpScriptRunner));
@@ -65,14 +65,14 @@ namespace CSharpScriptRunner
                     try { Directory.Delete(dir, true); }
                     catch { continue; }
                 }
-                WriteLine($"${nameof(CSharpScriptRunner)} is up-to-date ({BuildInfo.ReleaseTag})", ConsoleColor.Green);
+                WriteLine($"{nameof(CSharpScriptRunner)} is up-to-date ({BuildInfo.ReleaseTag})", ConsoleColor.Green);
                 return;
             }
 
             var tmpDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), nameof(CSharpScriptRunner), Guid.NewGuid().ToString());
             if (Directory.Exists(dstDir))
             {
-                WriteLine($"Newest version ({release.Version}) is already isntalled", ConsoleColor.Green);
+                WriteLine($"Newest version ({release.Version}) is already installed", ConsoleColor.Green);
                 return;
             }
 
@@ -82,7 +82,7 @@ namespace CSharpScriptRunner
             var downloadUrl = release.Assets.Select(x => x.DownloadUrl).FirstOrDefault(x => x.EndsWith($"-{platform}.zip", StringComparison.OrdinalIgnoreCase));
             if (downloadUrl == null)
             {
-                WriteLine("Operation failed", ConsoleColor.Red);
+                WriteLineError("Operation failed", ConsoleColor.Red);
                 return;
             }
 
@@ -115,9 +115,11 @@ namespace CSharpScriptRunner
                 ms.Seek(0, SeekOrigin.Begin);
                 using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
                 {
-                    foreach (var entry in archive.Entries)
+                    WriteLine("Extracting...");
+                    var progress = string.Empty;
+                    for (int i = 0; i < archive.Entries.Count; i++)
                     {
-                        Console.WriteLine($"Extracting {entry.FullName} ...");
+                        var entry = archive.Entries[i];
                         var parts = entry.FullName.Split('/');
                         parts = parts.Take(1).Append("bin").Concat(parts.Skip(1)).Prepend(tmpDir).ToArray();
                         var dstPath = Path.Combine(parts);
@@ -125,7 +127,16 @@ namespace CSharpScriptRunner
                         using var src = entry.Open();
                         using var dst = new FileStream(dstPath, FileMode.Create);
                         await src.CopyToAsync(dst);
+                        var newProgress = $"{(double)(i + 1) / archive.Entries.Count,4:P0}";
+                        if (newProgress != progress)
+                        {
+                            progress = newProgress;
+                            try { Console.CursorLeft = 0; }
+                            catch { }
+                            Console.Write(progress);
+                        }
                     }
+                    Console.WriteLine();
                 }
             }
 

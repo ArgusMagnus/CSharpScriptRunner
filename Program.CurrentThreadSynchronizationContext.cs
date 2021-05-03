@@ -7,40 +7,44 @@ namespace CSharpScriptRunner
 {
     static partial class Program
     {
-        sealed class CurrentThreadSynchronizationContext : System.Threading.SynchronizationContext
+        sealed class SynchronizationContextScope : IDisposable
         {
-            readonly BlockingCollection<(SendOrPostCallback Callback, object State)> _queue = new();
-            // readonly BlockingCollection<(SendOrPostCallback Callback, object State, ManualResetEventSlim Signal)> _queue = new();
+            readonly SynchronizationContext _syncCtx;
+            public SynchronizationContextScope() => _syncCtx = SynchronizationContext.Current;
 
-            CurrentThreadSynchronizationContext() { }
-
-            public override void Send(SendOrPostCallback d, object state)
+            public System.Runtime.CompilerServices.YieldAwaitable Install(SynchronizationContext synchronizationContext)
             {
-                // var signal = new ManualResetEventSlim(false);
-                // _queue.Add((d, state, signal));
-                // signal.Wait();
-                throw new InvalidOperationException();
+                SynchronizationContext.SetSynchronizationContext(synchronizationContext);
+                return Task.Yield();
             }
 
+            public void Dispose()
+            {
+                var current = SynchronizationContext.Current;
+                if (current == _syncCtx)
+                    return;
+                if (current is IDisposable disposable)
+                    disposable.Dispose();
+                SynchronizationContext.SetSynchronizationContext(_syncCtx);
+            }
+        }
+
+        sealed class CurrentThreadSynchronizationContext : System.Threading.SynchronizationContext, IDisposable
+        {
+            readonly BlockingCollection<(SendOrPostCallback Callback, object State)> _queue = new();
+            int _isRunning;
+            public CurrentThreadSynchronizationContext() { }
+            public override void Send(SendOrPostCallback d, object state) => throw new InvalidOperationException();
             public override void Post(SendOrPostCallback d, object state)
             {
                 _queue.Add((d, state));
-                // _queue.Add((d, state, null));
+                if (Interlocked.Exchange(ref _isRunning, 1) != 0)
+                    return;
+                foreach (var item in _queue.GetConsumingEnumerable())
+                    item.Callback(item.State);
             }
 
-            public static int Run(Func<Task<ErrorCodes>> main)
-            {
-                var syncCtx = new CurrentThreadSynchronizationContext();
-                SynchronizationContext.SetSynchronizationContext(syncCtx);
-                var mainTask = main();
-                mainTask.ContinueWith(t => syncCtx._queue.CompleteAdding());
-                foreach (var item in syncCtx._queue.GetConsumingEnumerable())
-                {
-                    item.Callback(item.State);
-                    // item.Signal?.Set();
-                }
-                return (int)mainTask.Result;
-            }
+            public void Dispose() => _queue.CompleteAdding();
         }
     }
 }
