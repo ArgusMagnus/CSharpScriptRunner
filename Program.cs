@@ -21,6 +21,9 @@ using Microsoft.CodeAnalysis.CSharp;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using Microsoft.CodeAnalysis.Host.Mef;
+using Microsoft.CodeAnalysis.Text;
+using Microsoft.CodeAnalysis.Completion;
 
 namespace CSharpScriptRunner
 {
@@ -39,7 +42,7 @@ namespace CSharpScriptRunner
         const string UpdateRequestUri = "https://api.github.com/repos/ArgusMagnus/CSharpScriptRunner/releases/latest";
         const string PowershellUpdateCommand =
             @"$dir=md ""$Env:Temp\{$(New-Guid)}""; $bkp=$ProgressPreference; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading...'; Invoke-WebRequest (Invoke-RestMethod -Uri '" + UpdateRequestUri +
-            @"' | select -Expand assets | select-string -InputObject {$_.browser_download_url} -Pattern '-win\.zip$' | Select -Expand Line -First 1) -OutFile ""$dir\CSX.zip""; Write-Host 'Expanding archive...'; Expand-Archive -Path ""$dir\CSX.zip"" -DestinationPath ""$dir""; & ""$dir\win\x64\CSharpScriptRunner.exe"" 'install'; Remove-Item $dir -Recurse; $ProgressPreference=$bkp; Write-Host 'Done'";
+            @"' | select -Expand assets | select-string -InputObject {$_.browser_download_url} -Pattern '-win\.zip$' | Select -Expand Line -First 1) -OutFile ""$dir\CSX.zip""; Write-Host 'Expanding archive...'; Expand-Archive -Path ""$dir\CSX.zip"" -DestinationPath ""$dir""; & ""$dir\x64\CSharpScriptRunner.exe"" 'install'; Remove-Item $dir -Recurse; $ProgressPreference=$bkp; Write-Host 'Done'";
 
 
         static class Verbs
@@ -162,57 +165,100 @@ namespace CSharpScriptRunner
             Console.ResetColor();
         }
 
-        static async Task DoRepl()
-        {
-            try { Console.CursorLeft = Console.CursorLeft; }
-            catch
-            {
-                WriteLineError("REPL not supported in current terminal", ConsoleColor.Red);
-                return;
-            }
+        // static async Task DoRepl()
+        // {
+        //     try { Console.CursorLeft = Console.CursorLeft; }
+        //     catch
+        //     {
+        //         WriteLineError("REPL not supported in current terminal", ConsoleColor.Red);
+        //         return;
+        //     }
 
-            var script = CSharpScript.Create(string.Empty);
+        //     var script = CSharpScript.Create(string.Empty);
 
-            while (true)
-            {
-                Console.Write("> ");
-                var line = Console.ReadLine();
+        //     // https://www.strathweb.com/2018/12/using-roslyn-c-completion-service-programmatically/
+        //     var host = MefHostServices.DefaultHost;
+        //     var ws = new AdhocWorkspace(host);
+        //     var projectId = ProjectId.CreateNewId();
+        //     var projectInfo = ProjectInfo.Create(projectId, VersionStamp.Default, "Script", "Script", LanguageNames.CSharp, isSubmission: true)
+        //         .WithCompilationOptions(script.GetCompilation().Options)
+        //         .WithMetadataReferences(script.GetCompilation().References);
 
-                if (string.Equals(line.TrimEnd(), "#reset", StringComparison.OrdinalIgnoreCase))
-                {
-                    script = CSharpScript.Create(string.Empty);
-                    continue;
-                }
+        //     var project = ws.AddProject(projectInfo);
+        //     var docInfo = DocumentInfo.Create(DocumentId.CreateNewId(projectId), "Script", sourceCodeKind: SourceCodeKind.Script);
+        //     var doc = ws.AddDocument(docInfo);
 
-                var newScript = script.ContinueWith(line);
-                var succeeded = true;
-                var color = Console.ForegroundColor;
-                foreach (var diag in newScript.Compile())
-                {
-                    switch (diag.Severity)
-                    {
-                        case DiagnosticSeverity.Warning: Console.ForegroundColor = ConsoleColor.Yellow; break;
-                        case DiagnosticSeverity.Error: succeeded = false; Console.ForegroundColor = ConsoleColor.Red; break;
-                        default: Console.ForegroundColor = color; break;
-                    }
+        //     var source = new StringBuilder();
+        //     var line = new StringBuilder();
 
-                    var loc = diag.Location.GetLineSpan();
-                    Console.WriteLine($"{diag.Severity} ({loc.StartLinePosition.Line}, {loc.StartLinePosition.Character}): {diag.GetMessage()}");
-                }
-                Console.ForegroundColor = color;
+        //     while (true)
+        //     {
+        //         Console.Write("> ");
+        //         source.Clear();
+        //         source.Append(script.Code);
+        //         line.Clear();
+        //         while (true)
+        //         {
+        //             var keyInfo = Console.ReadKey(true);
+        //             line.Append(keyInfo.KeyChar);
+        //             source.Append(keyInfo.KeyChar);
+        //             Console.Write(keyInfo.KeyChar);
+        //             if (keyInfo.Key == ConsoleKey.Enter)
+        //                 break;
+        //             doc = doc.WithText(SourceText.From(source.ToString()));
+        //             var service = CompletionService.GetService(doc);
+        //             var items = await service.GetCompletionsAsync(doc, source.Length);
+        //             if (items == null)
+        //                 continue;
+        //             var left = Console.CursorLeft;
+        //             var top = Console.CursorTop;
+        //             foreach (var item in items.Items)
+        //             {
+        //                 if (Console.CursorTop == 0)
+        //                     break;
+        //                 Console.CursorTop--;
+        //                 Console.Write(item.DisplayText);
+        //                 Console.CursorLeft = left;
+        //             }
+        //             Console.CursorTop = top;
+        //         }
 
-                if (!succeeded)
-                    continue;
+        //         if (string.Equals(line.ToString().TrimEnd(), "#reset", StringComparison.OrdinalIgnoreCase))
+        //         {
+        //             script = CSharpScript.Create(string.Empty);
+        //             continue;
+        //         }
 
-                var result = await newScript.RunAsync();
-                if (result.ReturnValue is string output)
-                    output = SymbolDisplay.FormatLiteral(output, true);
-                else
-                    output = result.ReturnValue?.ToString();
-                if (!string.IsNullOrEmpty(output))
-                    WriteLine(output);
-                script = newScript;
-            }
-        }
+
+        //         var newScript = script.ContinueWith(line.ToString());
+        //         var succeeded = true;
+        //         var color = Console.ForegroundColor;
+        //         foreach (var diag in newScript.Compile())
+        //         {
+        //             switch (diag.Severity)
+        //             {
+        //                 case DiagnosticSeverity.Warning: Console.ForegroundColor = ConsoleColor.Yellow; break;
+        //                 case DiagnosticSeverity.Error: succeeded = false; Console.ForegroundColor = ConsoleColor.Red; break;
+        //                 default: Console.ForegroundColor = color; break;
+        //             }
+
+        //             var loc = diag.Location.GetLineSpan();
+        //             Console.WriteLine($"{diag.Severity} ({loc.StartLinePosition.Line}, {loc.StartLinePosition.Character}): {diag.GetMessage()}");
+        //         }
+        //         Console.ForegroundColor = color;
+
+        //         if (!succeeded)
+        //             continue;
+
+        //         var result = await newScript.RunAsync();
+        //         if (result.ReturnValue is string output)
+        //             output = SymbolDisplay.FormatLiteral(output, true);
+        //         else
+        //             output = result.ReturnValue?.ToString();
+        //         if (!string.IsNullOrEmpty(output))
+        //             WriteLine(output);
+        //         script = newScript;
+        //     }
+        // }
     }
 }
