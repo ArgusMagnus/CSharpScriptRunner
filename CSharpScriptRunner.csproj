@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyTitle>C# Script Runner</AssemblyTitle>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0-windows</TargetFramework>
+    <TargetFramework>net6.0-windows</TargetFramework>
     <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
@@ -16,18 +16,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" Version="3.11.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="3.11.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="3.11.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" Version="4.1.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.1.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.1.0" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
-    <PackageReference Include="NuGet.Common" Version="5.11.0" />
-    <PackageReference Include="NuGet.Configuration" Version="5.11.0" />
-    <PackageReference Include="NuGet.Packaging" Version="5.11.0" />
-    <PackageReference Include="NuGet.Protocol" Version="5.11.0" />
-    <PackageReference Include="NuGet.Resolver" Version="5.11.0" />
+    <PackageReference Include="NuGet.Common" Version="6.1.0" />
+    <PackageReference Include="NuGet.Configuration" Version="6.1.0" />
+    <PackageReference Include="NuGet.Packaging" Version="6.1.0" />
+    <PackageReference Include="NuGet.Protocol" Version="6.1.0" />
+    <PackageReference Include="NuGet.Resolver" Version="6.1.0" />
     <PackageReference Include="System.IO.FileSystem.Primitives" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-    <PackageReference Include="Terminal.Gui" Version="1.2.1" />
+    <PackageReference Include="Terminal.Gui" Version="1.5.0" />
   </ItemGroup>
 
   <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
