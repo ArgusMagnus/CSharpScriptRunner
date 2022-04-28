@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
@@ -27,7 +28,7 @@ namespace CSharpScriptRunner
 
         static async Task<ErrorCodes> RunScript(string[] arguments)
         {
-            const string NuGetReferenceRegex = @"^\s*#r\s+""\s*nuget:\s*(?<name>[\w\d.-]+)\s*\/\s*(?<version>[\w\d.-]+)\s*""\s*$";
+            const string NuGetReferenceRegex = @"^\s*#r\s+""\s*nuget:\s*(?<name>[\w\d.-]+)\s*[\/,]\s*(?<version>[\w\d.-]+)\s*""\s*$";
 
             IEnumerable<string> args = arguments;
             var runtimeExt = string.Empty;
@@ -39,7 +40,7 @@ namespace CSharpScriptRunner
                     runtimeExt = arg.Substring(2);
                 else
                 {
-                    WriteLine($"Argument {arg} is not recognized.", ConsoleColor.Red);
+                    WriteLineError($"Argument {arg} is not recognized.", ConsoleColor.Red);
                     return ErrorCodes.UnrecognizedArgument;
                 }
             }
@@ -47,7 +48,7 @@ namespace CSharpScriptRunner
             var filePath = args.FirstOrDefault();
             if (!File.Exists(filePath))
             {
-                WriteLine($"Script file '{filePath}' does not exist.", ConsoleColor.Red);
+                WriteLineError($"Script file '{filePath}' does not exist.", ConsoleColor.Red);
                 return ErrorCodes.ScriptFileDoesNotExist;
             }
 
@@ -100,12 +101,17 @@ namespace CSharpScriptRunner
             if (entryPoint == null)
                 throw new Exception($"Entry point '{config.Type}.{config.Method}' not found");
 
-            // Environment.CurrentDirectory = Path.GetDirectoryName(scriptPath);
-            var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), assemblyLoader } });
-            var errorCode = (ErrorCodes?)((await task) as int?) ?? ErrorCodes.OK;
-            if (errorCode > ErrorCodes.OK && errorCode <= ErrorCodes.Reserved)
-                return ErrorCodes.ScriptReturnRangeConflict;
-            return errorCode;
+            // Clear SynchronizationContext to mimic standard console app behavior in script
+            using (var nullSyncCtxScope = new SynchronizationContextScope())
+            {
+                await nullSyncCtxScope.Install(null);
+
+                var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), assemblyLoader } });
+                var errorCode = (ErrorCodes?)((await task) as int?) ?? ErrorCodes.OK;
+                if (errorCode > ErrorCodes.OK && errorCode <= ErrorCodes.Reserved)
+                    return ErrorCodes.ScriptReturnRangeConflict;
+                return errorCode;
+            }
 
             static string GetCacheFilenameBase(string filename)
             {
