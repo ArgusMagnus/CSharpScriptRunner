@@ -27,7 +27,7 @@ namespace CSharpScriptRunner
         int _idxIntellisense;
 
         public ReplApp()
-        : base($"{nameof(CSharpScriptRunner)} REPL, {BuildInfo.ReleaseTag}")
+        : base($"{nameof(CSharpScriptRunner)} REPL, {BuildInfo.ReleaseTag}, EXPERIMENTAL")
         {
             ColorScheme = new()
             {
