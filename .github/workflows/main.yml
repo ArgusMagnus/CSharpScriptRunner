@@ -12,7 +12,7 @@ jobs:
       - name: Setup .NET Core SDK
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: '5.0.x'
+          dotnet-version: '6.0.x'
       - name: Build
         run: dotnet build -c Release
           
@@ -27,14 +27,14 @@ jobs:
       - name: Setup .NET Core SDK
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: '5.0.x'
+          dotnet-version: '6.0.x'
       - name: Build
         run: |
           $version = "${{ github.ref }}"
           $version = $version.Substring(10)
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_TAG=$version" -Encoding UTF8
-          dotnet publish -c Release -r win-x86 -o ./publish/win/x86 -p:ReleaseTag=$version
-          dotnet publish -c Release -r win-x64 -o ./publish/win/x64 -p:ReleaseTag=$version
+          dotnet publish -c Release -r win-x86 -o ./publish/win/x86 -p:ReleaseTag=$version --self-contained
+          dotnet publish -c Release -r win-x64 -o ./publish/win/x64 -p:ReleaseTag=$version --self-contained
           Compress-Archive -Path ./publish/win/* -DestinationPath ./publish/win.zip -CompressionLevel Optimal
       - name: Create Release
         id: create_release
