@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using System.Threading;
 using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
@@ -79,7 +80,8 @@ namespace CSharpScriptRunner
         static async Task<ErrorCodes> MainAsync(string[] args)
         {
             using var syncCtxScope = new SynchronizationContextScope();
-            await syncCtxScope.Install(new CurrentThreadSynchronizationContext());
+            await syncCtxScope.InstallAndYield(new CurrentThreadSynchronizationContext());
+            Debug.Assert(Thread.CurrentThread.GetApartmentState() == ApartmentState.STA);
             using var thisProcess = Process.GetCurrentProcess();
             var dir = Path.Combine(Path.GetDirectoryName(thisProcess.MainModule.FileName), "running");
             Directory.CreateDirectory(dir);
@@ -108,7 +110,7 @@ namespace CSharpScriptRunner
                     case Verbs.ClearCache: await ClearCache(); break;
                     case Verbs.InitVSCode: InitVSCode(); break;
                     case Verbs.ListRunning: await ListRunning(); break;
-                    case Verbs.Repl: await DoRepl(); break;
+                    case Verbs.Repl: DoRepl(); break;
                 }
             }
             catch (Exception ex)
@@ -141,6 +143,8 @@ namespace CSharpScriptRunner
             Console.WriteLine($"    Cleares the cache of previously compiled scripts.");
             Console.WriteLine($"{CmdAlias} {Verbs.ListRunning}");
             Console.WriteLine($"    Lists the currently running script engine instances.");
+            Console.WriteLine($"{CmdAlias} {Verbs.Repl}");
+            Console.WriteLine($"    Experimental: Enter interactive (REPL) mode.");
             Console.WriteLine($"Returned error codes:");
             foreach (var code in Enum.GetValues<ErrorCodes>().Where(x => x != ErrorCodes.Reserved))
                 Console.WriteLine($"    - {code,3:D}    {code}");

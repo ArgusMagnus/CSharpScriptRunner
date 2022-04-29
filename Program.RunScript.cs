@@ -104,7 +104,9 @@ namespace CSharpScriptRunner
             // Clear SynchronizationContext to mimic standard console app behavior in script
             using (var nullSyncCtxScope = new SynchronizationContextScope())
             {
-                await nullSyncCtxScope.Install(null);
+                nullSyncCtxScope.Install(null);
+
+                Debug.Assert(Thread.CurrentThread.GetApartmentState() == ApartmentState.STA);
 
                 var task = (Task<object>)entryPoint.Invoke(null, new object[] { new object[] { new ScriptGlobals(args.Skip(1).ToArray()), assemblyLoader } });
                 var errorCode = (ErrorCodes?)((await task) as int?) ?? ErrorCodes.OK;

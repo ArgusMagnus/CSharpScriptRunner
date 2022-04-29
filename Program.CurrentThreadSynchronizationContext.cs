@@ -10,16 +10,27 @@ namespace CSharpScriptRunner
         sealed class SynchronizationContextScope : IDisposable
         {
             readonly SynchronizationContext _syncCtx;
+            bool _isDisposed = true;
             public SynchronizationContextScope() => _syncCtx = SynchronizationContext.Current;
 
-            public System.Runtime.CompilerServices.YieldAwaitable Install(SynchronizationContext synchronizationContext)
+            public void Install(SynchronizationContext synchronizationContext)
             {
+                Dispose();
                 SynchronizationContext.SetSynchronizationContext(synchronizationContext);
+                _isDisposed = false;
+            }
+
+            public System.Runtime.CompilerServices.YieldAwaitable InstallAndYield(SynchronizationContext synchronizationContext)
+            {
+                Install(synchronizationContext);
                 return Task.Yield();
             }
 
             public void Dispose()
             {
+                if (_isDisposed)
+                    return;
+                _isDisposed = true;
                 var current = SynchronizationContext.Current;
                 if (current == _syncCtx)
                     return;
