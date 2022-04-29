@@ -5,10 +5,10 @@ namespace CSharpScriptRunner
 {
     static partial class Program
     {
-        static async Task DoRepl()
+        static void DoRepl()
         {
             using var scope = new SynchronizationContextScope();
-            await scope.Install(null);
+            scope.Install(null);
             Application.Init();
             Application.Top.Add(new ReplApp());
             Application.Run();
