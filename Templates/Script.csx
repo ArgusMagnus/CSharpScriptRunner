@@ -47,6 +47,18 @@ static class Script
     static readonly IntPtr _consoleWindow = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
+
+    static bool GetIsConsoleOwner()
+    {
+        int processId;
+        GetWindowThreadProcessId(_consoleWindow, out processId);
+        return processId == System.Diagnostics.Process.GetCurrentProcess().Id;
+    }
+
+    public static bool IsConsoleOwner { get; } = GetIsConsoleOwner();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
     static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     const int SW_HIDE = 0;
